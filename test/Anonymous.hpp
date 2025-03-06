@@ -8,15 +8,11 @@
 // file LICENSE_1_0.txt or copy at
 // http://www.boost.org/LICENSE_1_0.txt)
 
-// back-end
-#include <boost/msm/back/state_machine.hpp>
+#define BOOST_MSM_TEST_CASE_SUFFIX _anonymous_test
+#include "Common.hpp"
+
 //front-end
 #include <boost/msm/front/state_machine_def.hpp>
-
-#ifndef BOOST_MSM_NONSTANDALONE_TEST
-#define BOOST_TEST_MODULE MyTest
-#endif
-#include <boost/test/unit_test.hpp>
 
 namespace msm = boost::msm;
 namespace mpl = boost::mpl;
@@ -104,7 +100,7 @@ namespace
         typedef my_machine_ p; // makes transition table cleaner
 
         // Transition table for player
-        struct transition_table : mpl::vector<
+        struct transition_table : BOOST_MSM_TEST_TRANSITION_TABLE_TYPE<
             //    Start     Event         Next      Action               Guard
             //  +---------+-------------+---------+---------------------+----------------------+
            _row < State1  , none        , State2                                               >,
@@ -136,12 +132,12 @@ namespace
         }
     };
     // Pick a back-end
-    typedef msm::back::state_machine<my_machine_> my_machine;
+    typedef msm::BOOST_MSM_TEST_BACKEND::state_machine<my_machine_, msm::BOOST_MSM_TEST_COMPILE_POLICY_PARAMETER> my_machine;
 
     //static char const* const state_names[] = { "State1", "State2", "State3", "State4" };
 
 
-    BOOST_AUTO_TEST_CASE( anonymous_test )
+    BOOST_AUTO_TEST_CASE( BOOST_MSM_TEST_CASE )
     {        
         my_machine p;
 

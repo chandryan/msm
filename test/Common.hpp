@@ -1,0 +1,24 @@
+#define CONCAT(a, b) a##b
+#define EXPAND_AND_CONCAT(a, b) CONCAT(a, b)
+
+#ifndef BOOST_MSM_TEST_BACKEND
+// back-end
+#include <boost/msm/back/state_machine.hpp>
+#define BOOST_MSM_TEST_BACKEND back
+#endif
+
+#ifndef BOOST_MSM_TEST_TRANSITION_TABLE_TYPE
+#define BOOST_MSM_TEST_TRANSITION_TABLE_TYPE mpl::vector
+#endif
+
+#ifndef BOOST_MSM_TEST_COMPILE_POLICY
+#define BOOST_MSM_TEST_COMPILE_POLICY favor_runtime_speed
+#endif
+
+#define BOOST_MSM_TEST_COMPILE_POLICY_PARAMETER back:: BOOST_MSM_TEST_COMPILE_POLICY
+#define BOOST_MSM_TEST_CASE EXPAND_AND_CONCAT(BOOST_MSM_TEST_BACKEND, BOOST_MSM_TEST_CASE_SUFFIX)
+
+#ifndef BOOST_MSM_NONSTANDALONE_TEST
+#define BOOST_TEST_MODULE BOOST_MSM_TEST_CASE
+#endif
+#include <boost/test/unit_test.hpp>
