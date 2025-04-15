@@ -110,8 +110,9 @@ class end_interrupt_event_helper
         void operator()(mp11::mp_identity<Event>)
         {
             using Flag = EndInterruptFlag<Event>;
+            const Fsm* fsm = &m_fsm;
             m_is_flag_active_functions[to_type_index<Event>()] =
-                [&](){return m_fsm.template is_flag_active<Flag>();};
+                [fsm](){return fsm->template is_flag_active<Flag>();};
         }
      
      private:
@@ -189,13 +190,23 @@ private:
             mp11::mp_for_each<mp11::mp_transform<mp11::mp_identity, to_mp_list_t<typename State::deferred_events>>>(
                 deferred_event_init_helper{m_entries});
 
-            BOOST_IF_CONSTEXPR (is_composite_state<State>::value)
+            init_call_submachine<State>();
+        }
+
+        template<typename State>
+        typename ::boost::enable_if<is_composite_state<State>, void>::type
+        init_call_submachine()
+        {
+            m_call_submachine = [](Fsm& fsm, const any_event& evt)
             {
-                m_call_submachine = [](Fsm& fsm, const any_event& evt)
-                {
-                    return (fsm.template get_state<State&>()).process_event_internal(evt);
-                };
-            }
+                return (fsm.template get_state<State&>()).process_event_internal(evt);
+            };
+        }
+
+        template<typename State>
+        typename ::boost::disable_if<is_composite_state<State>, void>::type
+        init_call_submachine()
+        {
         }
 
         template<typename Event>
