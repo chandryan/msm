@@ -67,19 +67,6 @@ struct get_real_rows
     using is_real_row = mp11::mp_not<typename has_not_real_row_tag<Transition>::type>;
     typedef mp11::mp_copy_if<Stt, is_real_row> type;
 };
-template<typename Stt, typename State>
-struct get_rows_of_state
-{
-    template<typename Row>
-    using has_state = std::is_same<typename Row::current_state_type, State>;
-    using type = mp11::mp_copy_if<
-        typename get_real_rows<Stt>::type,
-        has_state
-        >;
-};
-template<typename Stt, typename State>
-using get_rows_of_state_t = typename get_rows_of_state<Stt, State>::type;
-
 
 // Convert an event to a type index.
 template<class Event>
