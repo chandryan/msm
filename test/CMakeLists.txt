@@ -1,6 +1,6 @@
 file(GLOB SOURCES "*.cpp")
-# list(FILTER SOURCES EXCLUDE REGEX "foo")
-# list(FILTER SOURCES INCLUDE REGEX "foo")
+# list(FILTER SOURCES EXCLUDE REGEX "xyz")
+# list(FILTER SOURCES INCLUDE REGEX "xyz")
 
 add_executable(msm_test
     ${SOURCES}

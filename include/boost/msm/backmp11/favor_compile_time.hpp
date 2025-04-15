@@ -116,7 +116,7 @@ class end_interrupt_event_helper
     class init_helper
     {
      public:
-        init_helper(Fsm& fsm, map& is_flag_active_functions)
+        init_helper(const Fsm& fsm, map& is_flag_active_functions)
             : m_fsm(fsm), m_is_flag_active_functions(is_flag_active_functions) {}
 
         template<typename Event>
@@ -128,7 +128,7 @@ class end_interrupt_event_helper
         }
      
      private:
-        Fsm& m_fsm;
+        const Fsm& m_fsm;
         map& m_is_flag_active_functions;
     };
 

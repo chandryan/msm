@@ -6,11 +6,12 @@
 cmake_minimum_required(VERSION 3.5...3.16)
 
 project(boost_msm VERSION "${BOOST_SUPERPROJECT_VERSION}" LANGUAGES CXX)
-# Required for testing puml frontend, but slows down compilation?
-set(CMAKE_CXX_STANDARD 20)
+# Temporary settings for development, need to be cleaned up later.
+# Required for testing puml frontend
+# set(CMAKE_CXX_STANDARD 20)
 # Required due to bug in clang19
-add_compile_options("-Wno-missing-template-arg-list-after-template-kw")
-add_compile_options("-ftime-trace")
+# add_compile_options("-Wno-missing-template-arg-list-after-template-kw")
+# add_compile_options("-ftime-trace")
 
 add_library(boost_msm INTERFACE)
 add_library(Boost::msm ALIAS boost_msm)
@@ -39,13 +40,6 @@ target_link_libraries(boost_msm
 )
 
 if(BUILD_TESTING AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/CMakeLists.txt")
-
+  enable_testing()
   add_subdirectory(test)
-
 endif()
-
-enable_testing()
-set(CMAKE_CXX_COMPILER_LAUNCHER time -f "%e seconds, %M kB RAM")
-include_directories(include)
-add_subdirectory(bench)
-add_executable(playground playground.cpp)
