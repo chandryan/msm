@@ -35,8 +35,6 @@ test-suite msm-unit-tests
     [ run AnonymousAndGuard.cpp ]
     [ run AnonymousEuml.cpp ]
     [ run Back11CompositeMachine.cpp ]
-    [ run Back11OrthogonalDeferred3WithPuml.cpp  : :
-        : [ requires cxx20_hdr_version cxx20_hdr_barrier cxx20_hdr_compare cxx20_hdr_format cxx20_hdr_ranges cxx20_hdr_numbers  ] ]
     [ run BigWithFunctors.cpp ]
     [ run CompositeEuml.cpp ]
     [ run CompositeMachine.cpp ]
@@ -46,16 +44,10 @@ test-suite msm-unit-tests
     [ run History.cpp ]
     [ run KleeneDeferred.cpp ]
     [ run ManyDeferTransitions.cpp ]
-    [ run OnlyStringPuml.cpp  : :
-        : [ requires cxx20_hdr_version cxx20_hdr_barrier cxx20_hdr_compare cxx20_hdr_format cxx20_hdr_ranges cxx20_hdr_numbers  ] ]
     [ run OrthogonalDeferred.cpp ]
     [ run OrthogonalDeferred2.cpp ]
     [ run OrthogonalDeferred3.cpp ]
     [ run OrthogonalDeferredEuml.cpp ]
-    [ run puml_syntax.cpp  : :
-        : [ requires cxx20_hdr_version cxx20_hdr_barrier cxx20_hdr_compare cxx20_hdr_format cxx20_hdr_ranges cxx20_hdr_numbers  ] ]
-    [ run puml_syntax_2.cpp  : :
-        : [ requires cxx20_hdr_version cxx20_hdr_barrier cxx20_hdr_compare cxx20_hdr_format cxx20_hdr_ranges cxx20_hdr_numbers  ] ]
     [ run Serialize.cpp ]
     [ run SerializeSimpleEuml.cpp ]
     [ run SerializeWithHistory.cpp ]
@@ -67,10 +59,6 @@ test-suite msm-unit-tests
     [ run SimpleInternalFunctors.cpp ]
     [ run SimpleMachine.cpp ]
     [ run SimpleWithFunctors.cpp ]
-    [ run SimpleWithPuml.cpp  : :
-        : [ requires cxx20_hdr_version cxx20_hdr_barrier cxx20_hdr_compare cxx20_hdr_format cxx20_hdr_ranges cxx20_hdr_numbers  ] ]
-    [ run StringTerminatePuml.cpp  : :
-        : [ requires cxx20_hdr_version cxx20_hdr_barrier cxx20_hdr_compare cxx20_hdr_format cxx20_hdr_ranges cxx20_hdr_numbers  ] ]
     [ run Test2RegionsAnonymous.cpp ]
     [ run TestConstructor.cpp ]
     [ run TestConstructorMovableOnlyTypes.cpp ]
@@ -80,5 +68,17 @@ test-suite msm-unit-tests
     [ run TestDeferIn2Regions.cpp ]
     [ run Throwing.cpp ]
     [ run TransitionSkipping.cpp ]
+    ;
+
+test-suite msm-unit-tests-cxxstd20
+    :
+    [ run Back11OrthogonalDeferred3WithPuml.cpp ]
+    [ run OnlyStringPuml.cpp ]
+    [ run puml_syntax.cpp ]
+    [ run puml_syntax_2.cpp ]
+    [ run SimpleWithPuml.cpp ]
+    [ run StringTerminatePuml.cpp ]
+    :
+    <cxxstd>20
     ;
 
