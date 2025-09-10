@@ -1830,26 +1830,22 @@ public:
         }
      }
 
-    // the following 2 functions handle the terminate/interrupt states handling
+    // the following function handles the terminate/interrupt states handling
     // if one of these states is found, the first one is used
     template <class Event>
-    bool is_event_handling_blocked_helper(const Event& event, mp11::mp_true)
+    bool is_event_handling_blocked(const Event& event)
     {
-        // if the state machine is terminated, do not handle any event
-        if (is_flag_active< ::boost::msm::TerminateFlag>())
-            return true;
-        // if the state machine is interrupted, do not handle any event
-        // unless the event is the end interrupt event
-        if ( is_flag_active< ::boost::msm::InterruptedFlag>() &&
-            !is_end_interrupt_event(event))
-            return true;
-        return false;
-    }
-    // otherwise simple handling, no flag => continue
-    template <class Event>
-    bool is_event_handling_blocked_helper(const Event&, mp11::mp_false)
-    {
-        // no terminate/interrupt states detected
+        if constexpr (has_fsm_blocking_states<library_sm>::value)
+        {
+            // if the state machine is terminated, do not handle any event
+            if (is_flag_active< ::boost::msm::TerminateFlag>())
+                return true;
+            // if the state machine is interrupted, do not handle any event
+            // unless the event is the end interrupt event
+            if (is_flag_active< ::boost::msm::InterruptedFlag>() &&
+                !is_end_interrupt_event(event))
+                return true;
+        }
         return false;
     }
     void do_handle_prio_msg_queue_deferred_queue(EventSource source, HandledEnum handled, ::boost::mpl::true_ const &)
@@ -1881,64 +1877,35 @@ public:
             }
         }
     }
-    // the following functions handle pre/post-process handling  of a message queue
+    // the following function handles the processing either with a try/catch protection or without
     template <class EventType>
-    bool do_pre_msg_queue_helper(EventType const&, ::boost::mpl::true_ const &)
+    HandledEnum do_process_helper(EventType const& evt, bool is_direct_call)
     {
-        // no message queue needed
-        return true;
-    }
-    template <class EventType>
-    bool do_pre_msg_queue_helper(EventType const& evt, ::boost::mpl::false_ const &)
-    {
-        // if we are already processing an event
-        if (m_event_processing)
-        {
-            // event has to be put into the queue
-            m_events_queue.m_events_queue.push_back(
-                [this, evt] { return process_event_internal(evt, static_cast<EventSource>(EVENT_SOURCE_DIRECT | EVENT_SOURCE_MSG_QUEUE));});
-
-            return false;
-        }
-
-        // event can be handled, processing
-        m_event_processing = true;
-        return true;
-    }
-    void do_allow_event_processing_after_transition( ::boost::mpl::true_ const &)
-    {
-        // no message queue needed
-    }
-    void do_allow_event_processing_after_transition( ::boost::mpl::false_ const &)
-    {
-        m_event_processing = false;
-    }
-    // the following 2 functions handle the processing either with a try/catch protection or without
-    template <class StateType,class EventType>
-    HandledEnum do_process_helper(EventType const& evt, ::boost::mpl::true_ const &, bool is_direct_call)
-    {
-        return this->do_process_event(evt,is_direct_call);
-    }
-    template <class StateType,class EventType>
-    HandledEnum do_process_helper(EventType const& evt, ::boost::mpl::false_ const &, bool is_direct_call)
-    {
-        // when compiling without exception support there is no formal parameter "e" in the catch handler.
-        // Declaring a local variable here does not hurt and will be "used" to make the code in the handler
-        // compilable although the code will never be executed.
-        std::exception e;
-        BOOST_TRY
+        if constexpr (is_no_exception_thrown<library_sm>::value)
         {
             return this->do_process_event(evt,is_direct_call);
         }
-        BOOST_CATCH (std::exception& e)
+        else
         {
-            // give a chance to the concrete state machine to handle
-            this->exception_caught(evt,*this,e);
-            return ::boost::msm::back::HANDLED_FALSE;
+            // when compiling without exception support there is no formal parameter "e" in the catch handler.
+            // Declaring a local variable here does not hurt and will be "used" to make the code in the handler
+            // compilable although the code will never be executed.
+            std::exception e;
+            BOOST_TRY
+            {
+                return this->do_process_event(evt,is_direct_call);
+            }
+            BOOST_CATCH (std::exception& e)
+            {
+                // give a chance to the concrete state machine to handle
+                this->exception_caught(evt,*this,e);
+                return ::boost::msm::back::HANDLED_FALSE;
+            }
+            BOOST_CATCH_END
+            return HANDLED_TRUE;
         }
-        BOOST_CATCH_END
-        return HANDLED_TRUE;
     }
+
     // handling of deferred events
     // if none is found in the SM, take the following empty main version
     template <class StateType, class Enable = int>
@@ -2196,54 +2163,48 @@ public:
     execute_return process_event_internal_impl(Event const& evt, EventSource source)
     {
         // if the state machine has terminate or interrupt flags, check them, otherwise skip
-        if (is_event_handling_blocked_helper
-                (evt, typename has_fsm_blocking_states<library_sm>::type()))
+        if (is_event_handling_blocked(evt))
         {
             return HANDLED_TRUE;
         }
 
-        // if a message queue is needed and processing is on the way
-        if (!do_pre_msg_queue_helper
-                (evt,::boost::mpl::bool_<is_no_message_queue<library_sm>::type::value>()))
+        // if a message queue is present, check if we have to enqueue the event first
+        // instead of processing it directly.
+        if constexpr (!is_no_message_queue<library_sm>::value)
         {
-            // wait for the end of current processing
-            return HANDLED_TRUE;
+            if (m_event_processing)
+            {
+                m_events_queue.m_events_queue.push_back(
+                    [this, evt] { return process_event_internal(evt, static_cast<EventSource>(EVENT_SOURCE_DIRECT | EVENT_SOURCE_MSG_QUEUE));});
+                return HANDLED_TRUE;
+            }
         }
-        else
-        {
-            // Process event
-            HandledEnum handled = this->do_process_helper<Event>(
-                evt,
-                ::boost::mpl::bool_<is_no_exception_thrown<library_sm>::type::value>(),
-                (EVENT_SOURCE_DIRECT & source));
 
-            // at this point we allow the next transition be executed without enqueing
-            // so that completion events and deferred events execute now (if any)
-            do_allow_event_processing_after_transition(
-                ::boost::mpl::bool_<is_no_message_queue<library_sm>::type::value>());
+        // Process the event
+        HandledEnum handled = this->do_process_helper(evt, (EVENT_SOURCE_DIRECT & source));
 
-            // Process completion transitions BEFORE any other event in the
-            // pool (UML Standard 2.3 15.3.14)
-            handle_eventless_transitions_helper<library_sm>
-                eventless_helper(this,(HANDLED_TRUE & handled));
-            eventless_helper.process_completion_event(source);
+        // Process completion transitions BEFORE any other event in the
+        // pool (UML Standard 2.3 15.3.14)
+        handle_eventless_transitions_helper<library_sm>
+            eventless_helper(this,(HANDLED_TRUE & handled));
+        eventless_helper.process_completion_event(source);
 
-            // After handling, take care of the deferred events, but only if
-            // we're not already processing from the deferred queue.
-            do_handle_prio_msg_queue_deferred_queue(
-                        source,handled,
-                        ::boost::mpl::bool_<has_event_queue_before_deferred_queue<library_sm>::type::value>());
-            return handled;
-        }
+        // After handling, take care of the deferred events, but only if
+        // we're not already processing from the deferred queue.
+        do_handle_prio_msg_queue_deferred_queue(
+                    source,handled,
+                    ::boost::mpl::bool_<has_event_queue_before_deferred_queue<library_sm>::type::value>());
+        return handled;
     }
 
     // minimum event processing without exceptions, queues, etc.
     template<class Event>
     HandledEnum do_process_event(Event const& evt, bool is_direct_call)
     {
-        HandledEnum handled = HANDLED_FALSE;
-
+        m_event_processing = true;
+        
         // dispatch the event to every region
+        HandledEnum handled = HANDLED_FALSE;
         region_processing_helper<Derived> helper(this,handled);
         helper.process(evt);
 
@@ -2260,6 +2221,8 @@ public:
                 this->no_transition(evt,*this,this->m_states[i]);
             }
         }
+        
+        m_event_processing = false;
         return handled;
     }
 

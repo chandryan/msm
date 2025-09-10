@@ -665,6 +665,8 @@ struct has_fsm_blocking_states
         state_set_mp11,
         is_state_blocking_mp11
         > type;
+
+    static constexpr bool value = type::value;
 };
 
 template <class StateType>
@@ -678,6 +680,8 @@ struct is_no_exception_thrown
         typename has_no_exception_thrown<StateType>::type,
         found
     >::type type;
+
+    static constexpr bool value = type::value;
 };
 
 template <class StateType>
@@ -691,6 +695,8 @@ struct is_no_message_queue
         typename has_no_message_queue<StateType>::type,
         found
     >::type type;
+
+    static constexpr bool value = type::value;
 };
 
 template <class StateType>
