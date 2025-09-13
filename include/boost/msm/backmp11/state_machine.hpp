@@ -1271,6 +1271,10 @@ private:
     // Get the upper fsm
     auto get_upper()
     {
+        // TODO:
+        // Required to also get the upper sm, even from the the upper sm itself.
+        // But this is a little difficult to grasp from the SM declaration
+        // and requires documentation for users to understand.
         if constexpr(std::is_void_v<UpperFsm>)
         {
             return this;
@@ -2471,13 +2475,18 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
             state.set_containing_sm(containing_sm);
             if constexpr (std::is_void_v<UpperFsm>)
             {
+                // TODO:
+                // Not sure why static_cast is required, self should be a base of UpperFsm
+                // and implicit cast be done automatically?
                 state.m_upper_fsm = static_cast<decltype(state.m_upper_fsm)>(self);
             }
             else
             {
                 // TODO:
                 // Not sure where the incompatibility comes from.
-                // Pass UpperFsm explicitly?
+                // Getting rid of the reinterpret_cast requires more investigation,
+                // probably UpperFsm would need to be passed down explicitly.
+                // But then void couldn't be used to mark the UpperFsm itself.
                 state.m_upper_fsm = reinterpret_cast<UpperFsm*>(containing_sm);
             }
         }
