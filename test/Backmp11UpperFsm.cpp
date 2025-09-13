@@ -45,7 +45,8 @@ namespace
     struct Default : public state<>{};
 
     // Forward-declare the backend of the upper machine,
-    // so we can declare the state machine independently
+    // so we can use it as template
+    // and we can declare the state machine independently
     // bottom-up.
     struct UpperMachine;
 
@@ -55,18 +56,12 @@ namespace
         template <typename Event, typename Fsm>
         void on_entry(const Event& /*event*/, Fsm& fsm)
         {
-            // TODO:
-            // Possible to get auto-completion?
-            // upper.test = false;
             fsm.get_upper()->machine_entries++;
         };
 
         template <typename Event, typename Fsm>
         void on_exit(const Event& /*event*/, Fsm& fsm)
         {
-            // TODO:
-            // Possible to get auto-completion?
-            // upper.test = false;
             fsm.get_upper()->machine_exits++;
         };
 
