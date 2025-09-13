@@ -132,6 +132,7 @@ struct make_euml_terminal<T,F,typename ::boost::enable_if<has_using_declared_tab
 // A0=Derived,A1=NoHistory,A2=CompilePolicy,A3=FsmCheckPolicy >
 template <
       class A0
+    , class UpperFsm = void
     , class A1 = parameter::void_
     , class A2 = parameter::void_
     , class A3 = parameter::void_
@@ -141,7 +142,7 @@ class state_machine : //public Derived
     public ::boost::parameter::binding<
             typename state_machine_signature::bind<A0,A1,A2,A3,A4>::type, tag::front_end
     >::type
-    , public make_euml_terminal<state_machine<A0,A1,A2,A3,A4>,
+    , public make_euml_terminal<state_machine<A0,UpperFsm,A1,A2,A3,A4>,
                          typename ::boost::parameter::binding<
                                     typename state_machine_signature::bind<A0,A1,A2,A3,A4>::type, tag::front_end
                          >::type
@@ -173,7 +174,7 @@ public:
 private:
 
     typedef state_machine<
-        A0,A1,A2,A3,A4>                             library_sm;
+        A0,UpperFsm,A1,A2,A3,A4>                    library_sm;
 
     typedef ::std::function<
         execute_return ()>                          transition_fct;
@@ -195,7 +196,7 @@ private:
     typedef bool (*flag_handler)(library_sm const&);
 
     // all state machines are friend with each other to allow embedding any of them in another fsm
-    template <class ,class , class, class, class
+    template <class, class, class, class, class, class
     > friend class state_machine;
 
     // helper to add, if needed, visitors to all states
@@ -1265,6 +1266,19 @@ private:
     void stop(Event const& finalEvent)
     {
         do_exit(finalEvent,*this);
+    }
+
+    // Get the upper fsm
+    auto get_upper()
+    {
+        if constexpr(std::is_void_v<UpperFsm>)
+        {
+            return this;
+        }
+        else
+        {
+            return m_upper_fsm;
+        }
     }
 
     // Main function used by clients of the derived FSM to make transitions.
@@ -2451,9 +2465,21 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
         template <class StateType>
         typename ::boost::enable_if<
             typename is_composite_state<StateType>::type,void >::type
-        new_state_helper(boost::msm::back::dummy<0> = 0) const
+        new_state_helper(boost::msm::back::dummy<0> = 0)
         {
-            std::get<get_state_id<stt, StateType>::value>(self->m_substate_list).set_containing_sm(containing_sm);
+            auto& state = std::get<get_state_id<stt, StateType>::value>(self->m_substate_list);
+            state.set_containing_sm(containing_sm);
+            if constexpr (std::is_void_v<UpperFsm>)
+            {
+                state.m_upper_fsm = static_cast<decltype(state.m_upper_fsm)>(self);
+            }
+            else
+            {
+                // TODO:
+                // Not sure where the incompatibility comes from.
+                // Pass UpperFsm explicitly?
+                state.m_upper_fsm = reinterpret_cast<UpperFsm*>(containing_sm);
+            }
         }
         // State is a sub fsm without exit pseudo states and does not get a callback to this fsm
         // or state is a normal state and needs nothing except creation
@@ -2481,7 +2507,7 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
         }
         // for every defined state in the sm
         template <class State>
-        void operator()( State const&) const
+        void operator()( State const&)
         {
             //create a new state with the defined id and type
             BOOST_STATIC_CONSTANT(int, state_id = (get_state_id<stt,State>::value));
@@ -2966,7 +2992,7 @@ private:
     bool                            m_is_included;
     visitor_fct_helper<BaseState>   m_visitors;
     substate_list                   m_substate_list;
-
+    UpperFsm*                       m_upper_fsm = nullptr;
 
 };
 
