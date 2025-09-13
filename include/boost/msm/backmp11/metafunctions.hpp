@@ -66,6 +66,12 @@ namespace boost { namespace msm { namespace backmp11
 
 using back::favor_runtime_speed;
 
+template<typename T>
+concept is_fsm = requires
+{
+ typename T::library_sm;
+};
+
 template <typename Sequence, typename Range>
 struct set_insert_range
 {

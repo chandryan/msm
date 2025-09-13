@@ -60,7 +60,7 @@
 #include <boost/msm/msm_grammar.hpp>
 #include <boost/msm/back/traits.hpp>
 #include <boost/msm/back/fold_to_list.hpp>
-#include <boost/msm/backmp11/favor_compile_time.hpp>
+// #include <boost/msm/backmp11/favor_compile_time.hpp>
 #include <boost/msm/backmp11/metafunctions.hpp>
 #include <boost/msm/backmp11/history_policies.hpp>
 #include <boost/msm/backmp11/common_types.hpp>
@@ -429,7 +429,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int region_index, int state, transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int region_index, int state, transition_event const& evt)
         {
 
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
@@ -455,7 +456,7 @@ private:
             fsm.m_states[region_index] = active_state_switching::after_exit(current_state,next_state);
 
             // then call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                              std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list),
                              std::get<get_state_id<stt, next_state_type>::value>(fsm.m_substate_list),
                              fsm.m_substate_list);
@@ -510,7 +511,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int region_index, int state, transition_event const& evt)
+        template<class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int region_index, int state, transition_event const& evt)
         {
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
             BOOST_STATIC_CONSTANT(int, next_state = (get_state_id<stt,next_state_type>::type::value));
@@ -574,7 +576,8 @@ private:
         >::type next_state_type;
 
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int region_index, int state, transition_event const& evt)
+        template<class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int region_index, int state, transition_event const& evt)
         {
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
             BOOST_STATIC_CONSTANT(int, next_state = (get_state_id<stt,next_state_type>::type::value));
@@ -596,7 +599,7 @@ private:
             fsm.m_states[region_index] = active_state_switching::after_exit(current_state,next_state);
 
             // then call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                             std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list),
                             std::get<get_state_id<stt, next_state_type>::value>(fsm.m_substate_list),
                             fsm.m_substate_list);
@@ -641,7 +644,8 @@ private:
         >::type next_state_type;
 
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int region_index, int state, transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int region_index, int state, transition_event const& evt)
         {
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
             BOOST_STATIC_CONSTANT(int, next_state = (get_state_id<stt,next_state_type>::type::value));
@@ -658,14 +662,14 @@ private:
 
             // first call the exit method of the current state
             execute_exit<current_state_type>
-                (std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list),evt,fsm);
+                (std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list),evt,upper_fsm);
             fsm.m_states[region_index] = active_state_switching::after_exit(current_state,next_state);
             fsm.m_states[region_index] = active_state_switching::after_action(current_state,next_state);
 
 
             // and finally the entry method of the new current state
             convert_event_and_execute_entry<next_state_type,T2>
-                (std::get<get_state_id<stt, next_state_type>::value>(fsm.m_substate_list),evt,fsm);
+                (std::get<get_state_id<stt, next_state_type>::value>(fsm.m_substate_list),evt,upper_fsm);
             fsm.m_states[region_index] = active_state_switching::after_entry(current_state,next_state);
             return HANDLED_TRUE;
         }
@@ -693,7 +697,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int , int state, transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int , int state, transition_event const& evt)
         {
 
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
@@ -706,7 +711,7 @@ private:
             }
 
             // call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                              std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list),
                              std::get<get_state_id<stt, next_state_type>::value>(fsm.m_substate_list),
                              fsm.m_substate_list);
@@ -737,7 +742,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int , int state, transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int , int state, transition_event const& evt)
         {
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
             boost::ignore_unused(state, current_state); // Avoid warnings if BOOST_ASSERT expands to nothing.
@@ -765,14 +771,15 @@ private:
         typedef T2 next_state_type;
 
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int , int state, transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int , int state, transition_event const& evt)
         {
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
             boost::ignore_unused(state, current_state); // Avoid warnings if BOOST_ASSERT expands to nothing.
             BOOST_ASSERT(state == (current_state));
 
             // call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                             std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list),
                             std::get<get_state_id<stt, next_state_type>::value>(fsm.m_substate_list),
                             fsm.m_substate_list);
@@ -793,7 +800,8 @@ private:
         typedef T2 next_state_type;
 
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& , int , int state, transition_event const& )
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& , int , int state, transition_event const& )
         {
             BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<stt,current_state_type>::type::value));
             boost::ignore_unused(state, current_state); // Avoid warnings if BOOST_ASSERT expands to nothing.
@@ -823,7 +831,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int , int , transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int , int , transition_event const& evt)
         {
             if (!check_guard(fsm,evt))
             {
@@ -832,7 +841,7 @@ private:
             }
 
             // then call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                 std::get<get_state_id<stt, StateType>::value>(fsm.m_substate_list),
                 std::get<get_state_id<stt, StateType>::value>(fsm.m_substate_list),
                 fsm.m_substate_list);
@@ -859,7 +868,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int , int , transition_event const& evt)
+        template<class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int , int , transition_event const& evt)
         {
             if (!check_guard(fsm,evt))
             {
@@ -868,7 +878,7 @@ private:
             }
 
             // then call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                 fsm,
                 fsm,
                 fsm.m_substate_list);
@@ -887,10 +897,11 @@ private:
         typedef typename ROW::Evt transition_event;
 
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int, int, transition_event const& evt)
+        template<class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int, int, transition_event const& evt)
         {
             // then call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                 std::get<get_state_id<stt, StateType>::value>(fsm.m_substate_list),
                 std::get<get_state_id<stt, StateType>::value>(fsm.m_substate_list),
                 fsm.m_substate_list);
@@ -907,10 +918,11 @@ private:
         typedef typename ROW::Evt transition_event;
 
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int, int, transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int, int, transition_event const& evt)
         {
             // then call the action method
-            HandledEnum res = ROW::action_call(fsm,evt,
+            HandledEnum res = ROW::action_call(upper_fsm,evt,
                 fsm,
                 fsm,
                 fsm.m_substate_list);
@@ -938,7 +950,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int, int, transition_event const& evt)
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int, int, transition_event const& evt)
         {
             if (!check_guard(fsm,evt))
             {
@@ -968,7 +981,8 @@ private:
             return false;
         }
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int, int, transition_event const& evt)
+        template<class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int, int, transition_event const& evt)
         {
             if (!check_guard(fsm,evt))
             {
@@ -987,7 +1001,8 @@ private:
         typedef StateType current_state_type;
         typedef StateType next_state_type;
         typedef typename ROW::Evt transition_event;
-        static HandledEnum execute(library_sm& , int , int , transition_event const& )
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm&, library_sm& , int , int , transition_event const& )
         {
             return HANDLED_TRUE;
         }
@@ -1000,7 +1015,8 @@ private:
         typedef library_sm current_state_type;
         typedef library_sm next_state_type;
         typedef typename ROW::Evt transition_event;
-        static HandledEnum execute(library_sm& , int , int , transition_event const& )
+        template <class UpperFsm>
+        static HandledEnum execute(UpperFsm&, library_sm& , int , int , transition_event const& )
         {
             return HANDLED_TRUE;
         }
@@ -1019,11 +1035,12 @@ private:
         typedef int                 is_frow;
 
         // Take the transition action and return the next state.
-        static HandledEnum execute(library_sm& fsm, int region_index, int , transition_event const& evt)
+        template<class UpperFsm>
+        static HandledEnum execute(UpperFsm& upper_fsm, library_sm& fsm, int region_index, int , transition_event const& evt)
         {
             // false as second parameter because this event is forwarded from outer fsm
             execute_return res =
-                (std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list)).process_event_internal(evt);
+                (std::get<get_state_id<stt, current_state_type>::value>(fsm.m_substate_list)).process_event_internal(upper_fsm, evt);
             fsm.m_states[region_index]=get_state_id<stt,T1>::type::value;
             return res;
         }
@@ -1218,7 +1235,7 @@ private:
     // extend the table with tables from composite states
     typedef typename extend_table<library_sm>::type complete_table;
     // define the dispatch table used for event dispatch
-    typedef dispatch_table<library_sm,complete_table,CompilePolicy> sm_dispatch_table;
+    // typedef dispatch_table<library_sm,complete_table,CompilePolicy> sm_dispatch_table;
      // build a sequence of regions
      typedef typename get_regions_as_sequence<typename Derived::initial_state>::type seq_initial_states;
     // Member functions
@@ -1271,7 +1288,7 @@ private:
     template<class Event>
     execute_return process_event(Event const& evt)
     {
-        return process_event_internal(evt, EVENT_SOURCE_DIRECT);
+        return process_event_internal(*this, evt, EVENT_SOURCE_DIRECT);
     }
 
     template <class EventType>
@@ -1524,13 +1541,13 @@ private:
     {
         return is_flag_active<EndInterruptFlag<Event>>();
     }
-    template <class Policy = CompilePolicy>
-    typename std::enable_if<std::is_same<Policy, favor_compile_time>::value, bool>::type
-    is_end_interrupt_event(const favor_compile_time::any_event& event)
-    {
-        static end_interrupt_event_helper helper{*this};
-        return helper.is_end_interrupt_event(event);
-    }
+    // template <class Policy = CompilePolicy>
+    // typename std::enable_if<std::is_same<Policy, favor_compile_time>::value, bool>::type
+    // is_end_interrupt_event(const favor_compile_time::any_event& event)
+    // {
+    //     static end_interrupt_event_helper helper{*this};
+    //     return helper.is_end_interrupt_event(event);
+    // }
 
     // visit the currently active states (if these are defined as visitable
     // by implementing accept)
@@ -1878,12 +1895,12 @@ public:
         }
     }
     // the following function handles the processing either with a try/catch protection or without
-    template <class EventType>
-    HandledEnum do_process_helper(EventType const& evt, bool is_direct_call)
+    template <class UpperFsm, class EventType>
+    HandledEnum do_process_helper(UpperFsm& upper_fsm, EventType const& evt, bool is_direct_call)
     {
         if constexpr (is_no_exception_thrown<library_sm>::value)
         {
-            return this->do_process_event(evt,is_direct_call);
+            return this->do_process_event(upper_fsm, evt,is_direct_call);
         }
         else
         {
@@ -1893,12 +1910,12 @@ public:
             std::exception e;
             BOOST_TRY
             {
-                return this->do_process_event(evt,is_direct_call);
+                return this->do_process_event(upper_fsm, evt,is_direct_call);
             }
             BOOST_CATCH (std::exception& e)
             {
                 // give a chance to the concrete state machine to handle
-                this->exception_caught(evt,*this,e);
+                this->exception_caught(evt,upper_fsm,e);
                 return ::boost::msm::back::HANDLED_FALSE;
             }
             BOOST_CATCH_END
@@ -2047,23 +2064,26 @@ public:
         typedef mp11::mp_set_contains<processable_events_internal_table,Event> is_event_processable;
 
         // forward to the correct do_process
-        static void process(Event const& evt,library_sm* self_,HandledEnum& result)
+        template <class UpperFsm>
+        static void process(UpperFsm& upper_fsm, Event const& evt,library_sm* self_,HandledEnum& result)
         {
-            do_process(evt,self_,result,is_event_processable());
+            do_process(upper_fsm, evt,self_,result,is_event_processable());
         }
     private:
         // the event is processable, let's try!
-        static void do_process(Event const& evt,library_sm* self_,HandledEnum& result, mp11::mp_true)
+        template <class UpperFsm>
+        static void do_process(UpperFsm& upper_fsm, Event const& evt,library_sm* self_,HandledEnum& result, mp11::mp_true)
         {
             if (result != HANDLED_TRUE)
             {
-                typedef dispatch_table<library_sm,complete_table,CompilePolicy> table;
-                HandledEnum res_internal = table::dispatch_internal(*self_, 0, self_->m_states[0], evt);
+                typedef dispatch_table<UpperFsm, library_sm,complete_table,CompilePolicy> table;
+                HandledEnum res_internal = table::dispatch_internal(upper_fsm, *self_, 0, self_->m_states[0], evt);
                 result = (HandledEnum)((int)result | (int)res_internal);
             }
         }
         // version doing nothing if the event is not in the internal stt and we can save ourselves the time trying to process
-        static void do_process(Event const& ,library_sm* ,HandledEnum& , mp11::mp_false)
+        template <class UpperFsm>
+        static void do_process(UpperFsm&, Event const& ,library_sm* ,HandledEnum& , mp11::mp_false)
         {
             // do nothing
         }
@@ -2075,15 +2095,15 @@ public:
     public:
         region_processing_helper(library_sm* self_,HandledEnum& result_)
             :self(self_),result(result_){}
-        template<class Event>
-        void process(Event const& evt)
+        template<class UpperFsm, class Event>
+        void process(UpperFsm& upper_fsm, Event const& evt)
         {
             // use this table as if it came directly from the user
-            typedef dispatch_table<library_sm,complete_table,CompilePolicy> table;
-            HandledEnum res = table::dispatch(*self, 0, self->m_states[0], evt);
+            typedef dispatch_table<UpperFsm, library_sm,complete_table,CompilePolicy> table;
+            HandledEnum res = table::dispatch(upper_fsm, *self, 0, self->m_states[0], evt);
             result = (HandledEnum)((int)result | (int)res);
             // process the event in the internal table of this fsm if the event is processable (present in the table)
-            process_fsm_internal_table<Event>::process(evt,self,result);
+            process_fsm_internal_table<Event>::process(upper_fsm, evt,self,result);
         }
         library_sm*     self;
         HandledEnum&    result;
@@ -2098,13 +2118,13 @@ public:
         template <class region_id,int Dummy=0>
         struct In
         {
-            template<class Event>
-            static void process(Event const& evt,library_sm* self_,HandledEnum& result_)
+            template<class UpperFsm, class Event>
+            static void process(UpperFsm& upper_fsm, Event const& evt,library_sm* self_,HandledEnum& result_)
             {
                 // use this table as if it came directly from the user
-                typedef dispatch_table<library_sm,complete_table,CompilePolicy> table;
+                typedef dispatch_table<UpperFsm, library_sm,complete_table,CompilePolicy> table;
                 HandledEnum res = table::dispatch(
-                    *self_, region_id::value , self_->m_states[region_id::value], evt);
+                    upper_fsm, *self_, region_id::value , self_->m_states[region_id::value], evt);
                 result_ = (HandledEnum)((int)result_ | (int)res);
                 In< ::boost::mpl::int_<region_id::value+1> >::process(evt,self_,result_);
             }
@@ -2133,34 +2153,40 @@ public:
         HandledEnum&    result;
     };
 
-    template<class Event, class Policy = CompilePolicy>
+    template<class UpperFsm, class Event, class Policy = CompilePolicy>
     typename enable_if<is_same<Policy, favor_runtime_speed>, execute_return>::type
-    process_event_internal(Event const& evt,
+    process_event_internal(UpperFsm& upper_fsm, Event const& evt,
                            EventSource source = EVENT_SOURCE_DEFAULT)
     {
-        return process_event_internal_impl(evt, source);
+        static_assert(is_fsm<UpperFsm>);
+        return process_event_internal_impl(upper_fsm, evt, source);
     }
 
-    template<class Event, class Policy = CompilePolicy>
-    typename enable_if<is_same<Policy, favor_compile_time>, execute_return>::type
-    process_event_internal(Event const& evt,
-                           EventSource source = EVENT_SOURCE_DEFAULT)
-    {
-        return process_event_internal_impl(favor_compile_time::any_event(evt), source);
-    }
+    // TODO:
+    // Retain support for favor_compile_time.
 
-    template<class Policy = CompilePolicy>
-    typename enable_if<is_same<Policy, favor_compile_time>, execute_return>::type
-    process_event_internal(favor_compile_time::any_event const& evt,
-                           EventSource source = EVENT_SOURCE_DEFAULT)
-    {
-        return process_event_internal_impl(evt, source);
-    }
+    // template<class UpperFsm, class Event, class Policy = CompilePolicy>
+    // typename enable_if<is_same<Policy, favor_compile_time>, execute_return>::type
+    // process_event_internal(UpperFsm& upper_fsm, Event const& evt,
+    //                        EventSource source = EVENT_SOURCE_DEFAULT)
+    // {
+    //     static_assert(is_fsm<UpperFsm>);
+    //     return process_event_internal_impl(upper_fsm, favor_compile_time::any_event(evt), source);
+    // }
+
+    // template<class UpperFsm, class Policy = CompilePolicy>
+    // typename enable_if<is_same<Policy, favor_compile_time>, execute_return>::type
+    // process_event_internal(UpperFsm& upper_fsm, favor_compile_time::any_event const& evt,
+    //                        EventSource source = EVENT_SOURCE_DEFAULT)
+    // {
+    //     static_assert(is_fsm<UpperFsm>);
+    //     return process_event_internal_impl(upper_fsm, evt, source);
+    // }
 
     // Main function used internally to make transitions
     // Can only be called for internally (for example in an action method) generated events.
-    template<class Event>
-    execute_return process_event_internal_impl(Event const& evt, EventSource source)
+    template<class UpperFsm, class Event>
+    execute_return process_event_internal_impl(UpperFsm& upper_fsm, Event const& evt, EventSource source)
     {
         // if the state machine has terminate or interrupt flags, check them, otherwise skip
         if (is_event_handling_blocked(evt))
@@ -2175,13 +2201,13 @@ public:
             if (m_event_processing)
             {
                 m_events_queue.m_events_queue.push_back(
-                    [this, evt] { return process_event_internal(evt, static_cast<EventSource>(EVENT_SOURCE_DIRECT | EVENT_SOURCE_MSG_QUEUE));});
+                    [this, &upper_fsm, evt] { return process_event_internal(upper_fsm, evt, static_cast<EventSource>(EVENT_SOURCE_DIRECT | EVENT_SOURCE_MSG_QUEUE));});
                 return HANDLED_TRUE;
             }
         }
 
         // Process the event
-        HandledEnum handled = this->do_process_helper(evt, (EVENT_SOURCE_DIRECT & source));
+        HandledEnum handled = this->do_process_helper(upper_fsm, evt, (EVENT_SOURCE_DIRECT & source));
 
         // Process completion transitions BEFORE any other event in the
         // pool (UML Standard 2.3 15.3.14)
@@ -2198,15 +2224,15 @@ public:
     }
 
     // minimum event processing without exceptions, queues, etc.
-    template<class Event>
-    HandledEnum do_process_event(Event const& evt, bool is_direct_call)
+    template<class UpperFsm, class Event>
+    HandledEnum do_process_event(UpperFsm& upper_fsm, Event const& evt, bool is_direct_call)
     {
         m_event_processing = true;
         
         // dispatch the event to every region
         HandledEnum handled = HANDLED_FALSE;
         region_processing_helper<Derived> helper(this,handled);
-        helper.process(evt);
+        helper.process(upper_fsm, evt);
 
         // if the event has not been handled and we have orthogonal zones, then
         // generate an error on every active state
@@ -2218,7 +2244,7 @@ public:
         {
             for (int i=0; i<nr_regions::value;++i)
             {
-                this->no_transition(evt,*this,this->m_states[i]);
+                this->no_transition(evt,upper_fsm,this->m_states[i]);
             }
         }
         
@@ -2577,11 +2603,11 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
 
      // helper used to call the correct entry method
      // unfortunately in O(number of states in the sub-sm) but should be better than a virtual call
-     template<class Event>
+     template<class UpperFsm, class Event>
      struct entry_helper
      {
-         entry_helper(int id,Event const& e,library_sm* self_):
-            state_id(id),evt(e),self(self_){}
+         entry_helper(int id,Event const& e,library_sm* self_, UpperFsm& upper_fsm_):
+            state_id(id),evt(e),self(self_),upper_fsm(&upper_fsm_)  {}
 
          template <class StateAndId>
          void operator()(StateAndId const&)
@@ -2591,22 +2617,23 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
              BOOST_STATIC_CONSTANT(int, id = (Id::value));
              if (id == state_id)
              {
-                 execute_entry<State>(std::get<Id::value>(self->m_substate_list),evt,*self);
+                 execute_entry<State>(std::get<Id::value>(self->m_substate_list),evt,*upper_fsm);
              }
          }
      private:
          int            state_id;
          Event const&   evt;
          library_sm*    self;
+         UpperFsm*      upper_fsm;
      };
 
      // helper used to call the correct exit method
      // unfortunately in O(number of states in the sub-sm) but should be better than a virtual call
-     template<class Event>
+     template<class UpperFsm, class Event>
      struct exit_helper
      {
-         exit_helper(int id,Event const& e,library_sm* self_):
-            state_id(id),evt(e),self(self_){}
+         exit_helper(int id,Event const& e,library_sm* self_, UpperFsm& upper_fsm_):
+            state_id(id),evt(e),self(self_),upper_fsm(&upper_fsm_){}
 
          template <class StateAndId>
          void operator()(StateAndId const&)
@@ -2616,24 +2643,25 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
              BOOST_STATIC_CONSTANT(int, id = (Id::value));
              if (id == state_id)
              {
-                 execute_exit<State>(std::get<Id::value>(self->m_substate_list),evt,*self);
+                 execute_exit<State>(std::get<Id::value>(self->m_substate_list),evt,*upper_fsm);
              }
          }
      private:
          int            state_id;
          Event const&   evt;
          library_sm*    self;
+         UpperFsm*      upper_fsm;
      };
 
      // start for states machines which are themselves embedded in other state machines (composites)
-     template <class Event>
-     void internal_start(Event const& incomingEvent)
+     template <class UpperFsm, class Event>
+     void internal_start(Event const& incomingEvent, UpperFsm& upper_fsm)
      {
          for (size_t region_id=0; region_id<nr_regions::value; region_id++)
          {
              //forward the event for handling by sub state machines
              mp11::mp_for_each<state_map_mp11>
-                 (entry_helper<Event>(m_states[region_id],incomingEvent,this));
+                 (entry_helper<UpperFsm, Event>(m_states[region_id],incomingEvent,this, upper_fsm));
          }
          // give a chance to handle an anonymous (eventless) transition
          handle_eventless_transitions_helper<library_sm> eventless_helper(this,true);
@@ -2670,7 +2698,7 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
              operator()(EventType const& evt,FsmType& fsm, ::boost::msm::back::dummy<0> = 0)
          {
              (static_cast<Derived*>(self))->on_entry(evt,fsm);
-             self->internal_start(evt);
+             self->internal_start(evt, fsm);
          }
 
          // this variant is for the direct entry case (just one entry, not a sequence of entries)
@@ -2786,7 +2814,7 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
         for (size_t region_id=0; region_id<nr_regions::value; region_id++)
         {
              mp11::mp_for_each<state_map_mp11>
-                 (exit_helper<Event>(m_states[region_id],incomingEvent,this));
+                 (exit_helper<FsmType, Event>(m_states[region_id],incomingEvent,this, fsm));
         }
         // then call our own exit
         (static_cast<Derived*>(this))->on_exit(incomingEvent,fsm);
@@ -2805,8 +2833,8 @@ BOOST_PP_REPEAT(BOOST_PP_ADD(BOOST_MSM_VISITOR_ARG_SIZE,1), MSM_VISITOR_ARGS_EXE
      public:
 #endif
     // no transition for event.
-    template <class Event>
-    static HandledEnum call_no_transition(library_sm& , int , int , Event const& )
+    template <class UpperFsm, class Event>
+    static HandledEnum call_no_transition(UpperFsm&, library_sm& , int , int , Event const& )
     {
         return HANDLED_FALSE;
     }
@@ -2951,7 +2979,7 @@ private:
     {
     };
 
-    template<class Fsm, class Stt, class Compile>
+    template<class UpperFsm, class Fsm, class Stt, class Compile>
     friend class dispatch_table;
 
     friend class end_interrupt_event_helper;

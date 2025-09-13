@@ -118,27 +118,27 @@ using get_table_index = typename table_index<Fsm, State, Event>::type;
 // Generates a singleton runtime lookup table that maps current state
 // to a function that makes the SM take its transition on the given
 // Event type.
-template<class Fsm, class Stt, class CompilePolicy>
+template<class UpperFsm, class Fsm, class Stt, class CompilePolicy>
 class dispatch_table;
 
-template<class Fsm, class Stt>
-class dispatch_table<Fsm, Stt, favor_runtime_speed>
+template<class UpperFsm, class Fsm, class Stt>
+class dispatch_table<UpperFsm, Fsm, Stt, favor_runtime_speed>
 {
 public:
     // Dispatch function for a specific event.
     template<class Event>
-    using cell = HandledEnum (*)(Fsm&, int,int,Event const&);
+    using cell = HandledEnum (*)(UpperFsm&, Fsm&, int,int,Event const&);
 
     // Dispatch an event.
     template<class Event>
-    static HandledEnum dispatch(Fsm& fsm, int region_id, int state_id, const Event& event)
+    static HandledEnum dispatch(UpperFsm& upper_fsm, Fsm& fsm, int region_id, int state_id, const Event& event)
     {
-        return event_dispatch_table<Event>::instance().entries[state_id+1](fsm, region_id, state_id, event);
+        return event_dispatch_table<Event>::instance().entries[state_id+1](upper_fsm, fsm, region_id, state_id, event);
     }
 
     // Dispatch an event to the FSM's internal table.
     template<class Event>
-    static HandledEnum dispatch_internal(Fsm& fsm, int region_id, int state_id, const Event& event)
+    static HandledEnum dispatch_internal(UpperFsm& upper_fsm, Fsm& fsm, int region_id, int state_id, const Event& event)
     {
         return event_dispatch_table<Event>::instance().entries[0](fsm, region_id, state_id, event);
     }
@@ -261,7 +261,7 @@ private:
                 template <class Sequence>
                 static
                 HandledEnum
-                execute(Fsm& , int, int, Event const& , ::boost::mpl::true_ const & )
+                execute(UpperFsm&, Fsm& , int, int, Event const& , ::boost::mpl::true_ const & )
                 {
                     // if at least one guard rejected, this will be ignored, otherwise will generate an error
                     return HANDLED_FALSE;
@@ -270,17 +270,17 @@ private:
                 template <class Sequence>
                 static
                 HandledEnum
-                execute(Fsm& fsm, int region_index , int state, Event const& evt,
+                execute(UpperFsm& upper_fsm, Fsm& fsm, int region_index , int state, Event const& evt,
                         ::boost::mpl::false_ const & )
                 {
                     // try the first guard
                     typedef typename ::boost::mpl::front<Sequence>::type first_row;
-                    HandledEnum res = first_row::execute(fsm,region_index,state,evt);
+                    HandledEnum res = first_row::execute(upper_fsm, fsm,region_index,state,evt);
                     if (HANDLED_TRUE!=res && HANDLED_DEFERRED!=res)
                     {
                         // if the first rejected, move on to the next one
                         HandledEnum sub_res = 
-                            execute<typename ::boost::mpl::pop_front<Sequence>::type>(fsm,region_index,state,evt,
+                            execute<typename ::boost::mpl::pop_front<Sequence>::type>(upper_fsm, fsm,region_index,state,evt,
                                 ::boost::mpl::bool_<
                                     ::boost::mpl::empty<typename ::boost::mpl::pop_front<Sequence>::type>::type::value>());
                         // if at least one guards rejects, the event will not generate a call to no_transition
@@ -293,10 +293,10 @@ private:
                 }
             };
             // Take the transition action and return the next state.
-            static HandledEnum execute(Fsm& fsm, int region_index, int state, Event const& evt)
+            static HandledEnum execute(UpperFsm& upper_fsm, Fsm& fsm, int region_index, int state, Event const& evt)
             {
                 // forward to helper
-                return execute_helper::template execute<Seq>(fsm,region_index,state,evt,
+                return execute_helper::template execute<Seq>(upper_fsm, fsm,region_index,state,evt,
                     ::boost::mpl::bool_< ::boost::mpl::empty<Seq>::type::value>());
             }
         };
@@ -351,10 +351,10 @@ private:
         template <class Row>
         struct convert_event_and_forward
         {
-            static HandledEnum execute(Fsm& fsm, int region_index, int state, Event const& evt)
+            static HandledEnum execute(UpperFsm& upper_fsm, Fsm& fsm, int region_index, int state, Event const& evt)
             {
                 typename Row::transition_event forwarded(evt);
-                return Row::execute(fsm,region_index,state,forwarded);
+                return Row::execute(upper_fsm, fsm,region_index,state,forwarded);
             }
         };
 
