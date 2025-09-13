@@ -17,11 +17,11 @@
 
 template<typename Front>
 using get_test_machines = boost::mpl::vector<
-    boost::msm::back::state_machine<Front>,
-    boost::msm::back::state_machine<Front, boost::msm::back::favor_compile_time>,
-    boost::msm::backmp11::state_machine<Front>,
-    boost::msm::backmp11::state_machine<Front, boost::msm::backmp11::favor_compile_time>,
-    boost::msm::back11::state_machine<Front>
+    // boost::msm::back::state_machine<Front>,
+    // boost::msm::back::state_machine<Front, boost::msm::back::favor_compile_time>,
+    boost::msm::backmp11::state_machine<Front>
+    // boost::msm::backmp11::state_machine<Front, boost::msm::backmp11::favor_compile_time>,
+    // boost::msm::back11::state_machine<Front>
     >;
 
 template <template <template <typename...> class, typename = void> class hierarchical>

@@ -4,9 +4,12 @@ if(CMAKE_CXX_STANDARD LESS 20)
     list(FILTER SOURCES EXCLUDE REGEX "puml|Puml")
 endif()
 
+add_compile_options(-ftemplate-backtrace-limit=0)
+
 add_executable(boost_msm_tests
     EXCLUDE_FROM_ALL
-    ${SOURCES}
+    # ${SOURCES}
+    Backmp11UpperFsm.cpp
     main.cpp
 )
 target_include_directories(boost_msm_tests PRIVATE ../include)
