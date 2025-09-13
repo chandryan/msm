@@ -45,9 +45,9 @@ namespace
     struct Default : public state<>{};
 
     // Forward-declare the backend of the upper machine,
-    // so we can declare the state machine independently
-    // bottom-up.
+    // so we can use it as Context.
     struct UpperMachine;
+    using Context = UpperMachine;
 
     template<typename T>
     struct MachineBase_ : public state_machine_def<MachineBase_<T>>
@@ -55,26 +55,20 @@ namespace
         template <typename Event, typename Fsm>
         void on_entry(const Event& /*event*/, Fsm& fsm)
         {
-            // TODO:
-            // Possible to get auto-completion?
-            // upper.test = false;
-            fsm.get_upper()->machine_entries++;
+            fsm.get_context()->machine_entries++;
         };
 
         template <typename Event, typename Fsm>
         void on_exit(const Event& /*event*/, Fsm& fsm)
         {
-            // TODO:
-            // Possible to get auto-completion?
-            // upper.test = false;
-            fsm.get_upper()->machine_exits++;
+            fsm.get_context()->machine_exits++;
         };
 
         using initial_state = Default;
     };
 
     struct LowerMachine_ : public MachineBase_<LowerMachine_> {};
-    using LowerMachine = state_machine<LowerMachine_, UpperMachine>;
+    using LowerMachine = state_machine<LowerMachine_, Context>;
 
     struct MiddleMachine_ : public MachineBase_<MiddleMachine_>
     {
@@ -83,7 +77,7 @@ namespace
             Row< LowerMachine , ExitSubFsm  , Default      >
         >;
     };
-    using MiddleMachine = state_machine<MiddleMachine_, UpperMachine>;
+    using MiddleMachine = state_machine<MiddleMachine_, Context>;
 
     struct UpperMachine_ : public MachineBase_<UpperMachine_>
     {
@@ -95,12 +89,12 @@ namespace
         uint32_t machine_entries = 0;
         uint32_t machine_exits = 0;
     };
-    struct UpperMachine : state_machine<UpperMachine_> {};
+    struct UpperMachine : state_machine<UpperMachine_, Context> {};
 
 
     BOOST_AUTO_TEST_CASE( backmp11_upper_fsm_test )
     {     
-        UpperMachine p;
+        UpperMachine p{&p};
 
         p.start(); 
         BOOST_CHECK_MESSAGE(p.machine_entries == 1, "SM entry not called correctly");
