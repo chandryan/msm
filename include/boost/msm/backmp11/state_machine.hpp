@@ -142,7 +142,7 @@ class state_machine : //public Derived
     public ::boost::parameter::binding<
             typename state_machine_signature::bind<A0,A1,A2,A3,A4>::type, tag::front_end
     >::type
-    , public make_euml_terminal<state_machine<A0,A1,A2,A3,A4>,
+    , public make_euml_terminal<state_machine<A0,Context,A1,A2,A3,A4>,
                          typename ::boost::parameter::binding<
                                     typename state_machine_signature::bind<A0,A1,A2,A3,A4>::type, tag::front_end
                          >::type
