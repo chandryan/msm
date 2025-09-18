@@ -6,10 +6,13 @@ endif()
 
 add_executable(boost_msm_tests
     EXCLUDE_FROM_ALL
-    ${SOURCES}
+    # ${SOURCES}
+    SimpleWithFunctors.cpp
+    OrthogonalDeferredEuml.cpp
+    Serialize.cpp
     main.cpp
 )
 target_link_libraries(boost_msm_tests Boost::msm)
 target_compile_definitions(boost_msm_tests PRIVATE "BOOST_MSM_NONSTANDALONE_TEST")
 
-add_test(boost_msm_tests boost_msm_tests)
+add_test(boost_msm_tests boost_msm_tests --log_level=all)
