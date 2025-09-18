@@ -12,27 +12,36 @@ add_library(Boost::msm ALIAS boost_msm)
 
 target_include_directories(boost_msm INTERFACE include)
 
-target_link_libraries(boost_msm
-  INTERFACE
-    Boost::any
-    Boost::assert
-    Boost::bind
-    Boost::circular_buffer
-    Boost::config
-    Boost::core
-    Boost::function
-    Boost::fusion
-    Boost::mp11
-    Boost::mpl
-    Boost::parameter
-    Boost::phoenix
-    Boost::preprocessor
-    Boost::proto
-    Boost::serialization
-    Boost::tuple
-    Boost::type_traits
-    Boost::typeof
+if(BOOST_SUPERPROJECT_SOURCE_DIR)
+  target_link_libraries(boost_msm
+    INTERFACE
+      Boost::any
+      Boost::assert
+      Boost::bind
+      Boost::circular_buffer
+      Boost::config
+      Boost::core
+      Boost::function
+      Boost::fusion
+      Boost::mp11
+      Boost::mpl
+      Boost::parameter
+      Boost::phoenix
+      Boost::preprocessor
+      Boost::proto
+      Boost::serialization
+      Boost::tuple
+      Boost::type_traits
+      Boost::typeof
 )
+# Standalone build
+else()
+  if(NOT TARGET Boost::boost)
+    # Boost 1.66 is the first version with Mp11
+    find_package(Boost 1.66 REQUIRED)
+  endif()
+  target_link_libraries(boost_msm INTERFACE Boost::boost)
+endif()
 
 if(BUILD_TESTING AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/CMakeLists.txt")
   enable_testing()
