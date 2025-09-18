@@ -13,6 +13,11 @@ add_executable(boost_msm_tests
     main.cpp
 )
 target_link_libraries(boost_msm_tests Boost::msm)
+# TODO:
+# Consider removing check and add tests only in the super-project build.
+if(BOOST_SUPERPROJECT_SOURCE_DIR)
+    target_link_libraries(boost_msm_tests Boost::unit_test_framework)
+endif()
 target_compile_definitions(boost_msm_tests PRIVATE "BOOST_MSM_NONSTANDALONE_TEST")
 
 add_test(NAME boost_msm_tests COMMAND boost_msm_tests --log_level=all)
