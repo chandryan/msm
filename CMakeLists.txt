@@ -33,7 +33,7 @@ if(BOOST_SUPERPROJECT_SOURCE_DIR)
       Boost::tuple
       Boost::type_traits
       Boost::typeof
-)
+  )
 # Standalone build
 else()
   if(NOT TARGET Boost::boost)
