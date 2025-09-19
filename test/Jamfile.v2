@@ -72,7 +72,8 @@ test-suite msm-unit-tests
 
 test-suite msm-unit-tests-cxxstd20
     :
-    [ run Back11OrthogonalDeferred3WithPuml.cpp ]
+    # MSVC 32-bit runs out of memory when compiling this test
+    [ run Back11OrthogonalDeferred3WithPuml.cpp : : : <toolset>msvc-14.3,<address-model>32:<build>no ]
     [ run OnlyStringPuml.cpp ]
     [ run puml_syntax.cpp ]
     [ run puml_syntax_2.cpp ]
