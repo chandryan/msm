@@ -25,6 +25,8 @@ project
        <toolset>gcc:<optimization>off
        <toolset>darwin:<optimization>off
        <toolset>intel:<optimization>off
+       # MSVC runs out of heap in many compilations. 
+       <toolset>msvc-14.3,<address-model>32:<build>no
        <library>/boost/test//boost_unit_test_framework/<link>static
        <library>/boost/serialization//boost_serialization/<link>static
     ;
@@ -73,7 +75,7 @@ test-suite msm-unit-tests
 test-suite msm-unit-tests-cxxstd20
     :
     # MSVC 32-bit runs out of memory when compiling this test
-    [ run Back11OrthogonalDeferred3WithPuml.cpp : : : <toolset>msvc-14.3,<address-model>32:<build>no ]
+    [ run Back11OrthogonalDeferred3WithPuml.cpp ]
     [ run OnlyStringPuml.cpp ]
     [ run puml_syntax.cpp ]
     [ run puml_syntax_2.cpp ]
