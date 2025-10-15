@@ -41,6 +41,15 @@ constexpr active_states_t active_states;
 struct all_states_t {};
 constexpr all_states_t all_states;
 
+// Tag to retrieve the back_end of a state.
+struct back_end_t {};
+constexpr back_end_t back_end;
+
+// Tag to retrieve the front_end of a state.
+struct front_end_t {};
+constexpr front_end_t front_end;
+
+
 }}} // namespace boost::msm::backmp11
 
 

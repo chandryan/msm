@@ -42,6 +42,13 @@ struct state_machine_def :  public boost::msm::front::detail::state_base<BaseSta
 
     typedef BaseState                                BaseAllStates;
 
+    // typedefs used internally
+    struct internal
+    {
+        typedef detail::composite_state_tag          tag;
+    };
+    
+
     template<
         typename T1
         , class Event

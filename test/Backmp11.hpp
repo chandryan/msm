@@ -17,6 +17,7 @@
 #include <boost/parameter.hpp>
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/array.hpp>
+#include <boost/msm/back/state_machine.hpp>
 
 namespace boost::msm::backmp11
 {
@@ -28,11 +29,6 @@ struct favor_compile_time_config : boost::msm::backmp11::state_machine_config
 
 using back::queue_container_deque;
 
-BOOST_PARAMETER_TEMPLATE_KEYWORD(front_end)
-BOOST_PARAMETER_TEMPLATE_KEYWORD(history_policy)
-BOOST_PARAMETER_TEMPLATE_KEYWORD(compile_policy)
-BOOST_PARAMETER_TEMPLATE_KEYWORD(fsm_check_policy)
-BOOST_PARAMETER_TEMPLATE_KEYWORD(queue_container_policy)
 
 template <
     class A1,
@@ -44,16 +40,16 @@ struct state_machine_config_adapter : state_machine_config
 {
     typedef ::boost::parameter::parameters<
       ::boost::parameter::optional<
-            ::boost::parameter::deduced< tag::history_policy>, has_history_policy< ::boost::mpl::_ >
+            ::boost::parameter::deduced< back::tag::history_policy>, has_history_policy< ::boost::mpl::_ >
         >
     , ::boost::parameter::optional<
-            ::boost::parameter::deduced< tag::compile_policy>, has_compile_policy< ::boost::mpl::_ >
+            ::boost::parameter::deduced< back::tag::compile_policy>, has_compile_policy< ::boost::mpl::_ >
         >
     , ::boost::parameter::optional<
-            ::boost::parameter::deduced< tag::fsm_check_policy>, has_fsm_check< ::boost::mpl::_ >
+            ::boost::parameter::deduced< back::tag::fsm_check_policy>, has_fsm_check< ::boost::mpl::_ >
         >
     , ::boost::parameter::optional<
-            ::boost::parameter::deduced< tag::queue_container_policy>,
+            ::boost::parameter::deduced< back::tag::queue_container_policy>,
             has_queue_container_policy< ::boost::mpl::_ >
         >
     > config_signature;
@@ -63,10 +59,10 @@ struct state_machine_config_adapter : state_machine_config
         config_args;
 
     typedef typename ::boost::parameter::binding<
-        config_args, tag::compile_policy, favor_runtime_speed >::type    compile_policy;
+        config_args, back::tag::compile_policy, favor_runtime_speed >::type    compile_policy;
 
     typedef typename ::boost::parameter::binding<
-        config_args, tag::queue_container_policy,
+        config_args, back::tag::queue_container_policy,
         queue_container_deque >::type                                    QueueContainerPolicy;
     template<typename T>
     using queue_container = typename QueueContainerPolicy::template In<T>::type;

@@ -44,8 +44,28 @@
 #include <boost/msm/backmp11/favor_compile_time.hpp>
 #include <boost/msm/backmp11/state_machine_config.hpp>
 
+#include <boost/msm/front/state_machine_def.hpp>
+
+namespace boost::msm::front
+{
+
+template <class Derived,class BaseState>
+struct state_machine_def;
+
+template<class Base, class SmPtrPolicy>
+struct state;
+
+}
+
 namespace boost { namespace msm { namespace backmp11
 {
+
+namespace detail
+{
+
+struct back_end_tag {};
+
+}
 
 // event used internally for wrapping a direct entry
 template <class StateType,class Event>
@@ -553,7 +573,43 @@ private:
     typedef typename generate_state_map<stt>::type state_map_mp11;
     typedef typename generate_event_set<stt>::event_set_mp11 event_set_mp11;
     typedef history_impl<typename FrontEnd::history, nr_regions> concrete_history;
-    typedef mp11::mp_rename<state_set_mp11, std::tuple> substate_list;
+
+    struct internal
+    {
+        using tag = detail::back_end_tag;
+
+        template<typename T, typename Enable = void>
+        struct back_end;
+        template<typename T>
+        struct back_end<T, std::enable_if_t<std::is_same_v<typename T::internal::tag, backmp11::detail::back_end_tag>>>
+        {
+            using type = T;
+        };
+        template<typename T>
+        struct back_end<T, std::enable_if_t<std::is_same_v<typename T::internal::tag, msm::front::detail::composite_state_tag>>>
+        {
+            using type = state_machine<T, Config, void>;
+        };
+        template<typename T>
+        struct back_end<T, std::enable_if_t<std::is_same_v<typename T::internal::tag, msm::front::detail::state_tag>>>
+        {
+            using type = T;
+        };
+
+        template<typename T>
+        using back_end_t = typename back_end<T>::type;
+        using back_ends = mp11::mp_transform<back_end_t, state_set_mp11_pre>;
+        using type = mp11::mp_rename<back_ends, std::tuple>;
+
+    };
+    using states_t = typename internal::type;
+    typedef typename generate_state_set<stt>::state_set_mp11 state_set_mp11;
+
+    using substate_list = states_t;
+    
+
+    // typedef mp11::mp_rename<state_set_mp11, std::tuple> substate_list;
+
     typedef typename generate_event_set<
         typename create_real_stt<state_machine, typename state_machine::internal_transition_table >::type
     >::event_set_mp11 processable_events_internal_table;
@@ -897,14 +953,25 @@ private:
     template <class State>
     State& get_state()
     {
-        return std::get<std::remove_reference_t<State>>(m_states);
+        using T = std::remove_reference_t<State>;
+        return std::get<typename internal::template back_end<T>::type>(m_states);
     }
     // Get a state (const version).
     template <class State>
     const State& get_state() const
     {
-        return std::get<std::remove_reference_t<State>>(m_states);
+        using T = std::remove_reference_t<State>;
+        return std::get<typename internal::template back_end<T>::type>(m_states);
     }
+
+    // Get a state's back-end.
+    template <class FrontEnd>
+    state_machine<FrontEnd, Config>& get_state(back_end_t)
+    {
+        using T = state_machine<FrontEnd, Config>;
+        return std::get<T>(m_states);
+    }
+
 
     // checks if a flag is active using the BinaryOp as folding function
     template <class Flag,class BinaryOp>
