@@ -1107,8 +1107,6 @@ class state_machine_base : public FrontEnd
 
             // Iteratively process all of the events within the deferred
             // queue upto (but not including) newly deferred events.
-            // if we did not defer one in the queue, then we need to try again
-            bool not_only_deferred = false;
             while (!deferred_events.queue.empty())
             {
                 deferred_event_t& deferred_event =
@@ -1122,40 +1120,6 @@ class state_machine_base : public FrontEnd
                 auto next = deferred_event.function;
                 deferred_events.queue.pop_front();
                 process_result res = next();
-                if (res != process_result::HANDLED_FALSE && res != process_result::HANDLED_DEFERRED)
-                {
-                    not_only_deferred = true;
-                }
-                if (not_only_deferred)
-                {
-                    // handled one, stop processing deferred until next block reorders
-                    break;
-                }
-            }
-            if (not_only_deferred)
-            {
-                // attempt to go back to the situation prior to processing, 
-                // in case some deferred events would have been re-queued
-                // in that case those would have a higher sequence number
-                std::stable_sort(
-                    deferred_events.queue.begin(),
-                    deferred_events.queue.end(),
-                    [](const deferred_event_t& a, const deferred_event_t& b)
-                    {
-                        return a.seq_cnt > b.seq_cnt;
-                    }
-                );
-                // reset sequence number for all
-                std::for_each(
-                    deferred_events.queue.begin(),
-                    deferred_events.queue.end(),
-                    [&deferred_events](deferred_event_t& deferred_event)
-                    {
-                        deferred_event.seq_cnt = deferred_events.cur_seq_cnt + 1;
-                    }
-                );
-                // one deferred event was successfully processed, try again
-                try_process_deferred_events(true);
             }
         }
     }
