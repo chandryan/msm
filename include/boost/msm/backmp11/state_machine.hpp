@@ -1107,56 +1107,32 @@ class state_machine_base : public FrontEnd
 
             // Iteratively process all of the events within the deferred
             // queue upto (but not including) newly deferred events.
-            // if we did not defer one in the queue, then we need to try again
-            bool not_only_deferred = false;
-            while (!deferred_events.queue.empty())
+            auto old_queue = std::move(deferred_events.queue);
+            deferred_events_queue_t left_queue;
+            deferred_events_queue_t right_queue;
+            while (!old_queue.empty())
             {
-                deferred_event_t& deferred_event =
-                    deferred_events.queue.front();
+                deferred_event_t& deferred_event = old_queue.front();
 
                 if (deferred_events.cur_seq_cnt != deferred_event.seq_cnt)
                 {
+                    left_queue.insert(left_queue.end(), old_queue.begin(), old_queue.end());
                     break;
                 }
 
                 auto next = deferred_event.function;
-                deferred_events.queue.pop_front();
+                old_queue.pop_front();
                 process_result res = next();
-                if (res != process_result::HANDLED_FALSE && res != process_result::HANDLED_DEFERRED)
+                if (res & process_result::HANDLED_DEFERRED)
                 {
-                    not_only_deferred = true;
+                    left_queue.push_back(std::move(deferred_events.queue.front()));
+                    deferred_events.queue.pop_front();
                 }
-                if (not_only_deferred)
-                {
-                    // handled one, stop processing deferred until next block reorders
-                    break;
-                }
+                right_queue.insert(right_queue.end(), deferred_events.queue.begin(), deferred_events.queue.end());
+                deferred_events.queue.clear();
             }
-            if (not_only_deferred)
-            {
-                // attempt to go back to the situation prior to processing, 
-                // in case some deferred events would have been re-queued
-                // in that case those would have a higher sequence number
-                std::stable_sort(
-                    deferred_events.queue.begin(),
-                    deferred_events.queue.end(),
-                    [](const deferred_event_t& a, const deferred_event_t& b)
-                    {
-                        return a.seq_cnt > b.seq_cnt;
-                    }
-                );
-                // reset sequence number for all
-                std::for_each(
-                    deferred_events.queue.begin(),
-                    deferred_events.queue.end(),
-                    [&deferred_events](deferred_event_t& deferred_event)
-                    {
-                        deferred_event.seq_cnt = deferred_events.cur_seq_cnt + 1;
-                    }
-                );
-                // one deferred event was successfully processed, try again
-                try_process_deferred_events(true);
-            }
+            deferred_events.queue = std::move(left_queue);
+            deferred_events.queue.insert(deferred_events.queue.end(), right_queue.begin(), right_queue.end());
         }
     }
 
