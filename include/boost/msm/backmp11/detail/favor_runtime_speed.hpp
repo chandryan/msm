@@ -44,6 +44,10 @@ struct compile_policy_impl<favor_runtime_speed>
 {
     using add_forwarding_rows = mp11::mp_true;
 
+    // Bitmask for process result checks.
+    static constexpr process_result handled_or_deferred =
+        process_result::HANDLED_TRUE | process_result::HANDLED_DEFERRED;
+
     template <typename Event>
     static constexpr bool is_completion_event(const Event&)
     {
@@ -199,20 +203,20 @@ struct compile_policy_impl<favor_runtime_speed>
     public:
         // Dispatch function for a specific event.
         template<class Event>
-        using cell = HandledEnum (*)(Fsm&, int,int,Event const&);
+        using cell = process_result (*)(Fsm&, int,int,Event const&);
 
         // Dispatch an event.
         template<class Event>
-        static HandledEnum dispatch(Fsm& fsm, int region_id, int state_id, const Event& event)
+        static process_result dispatch(Fsm& fsm, int region_id, int state_id, const Event& event)
         {
-            return event_dispatch_table<Event>::instance().entries[state_id+1](fsm, region_id, state_id, event);
+            return event_dispatch_table<Event>::dispatch(fsm, region_id, state_id, event);
         }
 
         // Dispatch an event to the FSM's internal table.
         template<class Event>
-        static HandledEnum dispatch_internal(Fsm& fsm, int region_id, int state_id, const Event& event)
+        static process_result dispatch_internal(Fsm& fsm, int region_id, int state_id, const Event& event)
         {
-            return event_dispatch_table<Event>::instance().entries[0](fsm, region_id, state_id, event);
+            return event_dispatch_table<Event>::dispatch_internal(fsm, region_id, state_id, event);
         }
 
     private:
@@ -225,16 +229,31 @@ struct compile_policy_impl<favor_runtime_speed>
         template<class Event>
         class event_dispatch_table
         {
-        public:
+          public:
             using event_cell = cell<Event>;
 
-            // The singleton instance.
-            static const event_dispatch_table& instance() {
-                static event_dispatch_table table;
-                return table;
+            static process_result dispatch(Fsm& fsm, int region_id, int state_id, const Event& event)
+            {
+                return instance().entries[state_id + 1](fsm, region_id, state_id, event);
             }
 
-        private:
+            static process_result dispatch_internal(Fsm& fsm, int region_id, int state_id, const Event& event)
+            {
+                return instance().entries[0](fsm, region_id, state_id, event);
+            }
+
+          private:
+            struct transition_call
+            {
+                // Evaluated processing result of the row.
+                // HANDLED_TRUE is used as placeholder, in this case the real result
+                // is provided by calling the row implementation's execute function.
+                process_result evaluated_result;
+                // Points to the execute function of the back-end's row implementation.
+                event_cell execute;
+            };
+
+// #if defined(_MSC_VER)
             // A function object for use with mp11::mp_for_each that stuffs transitions into cells.
             class row_init_helper
             {
@@ -255,114 +274,100 @@ struct compile_policy_impl<favor_runtime_speed>
                     operator()(Row)
                 {
                     m_entries[get_table_index<Fsm, typename Row::current_state_type>::value] =
-                        &convert_event_and_forward<Row>::execute;
+                        &convert_event_and_execute<Row>;
                 }
 
             private:
                 event_cell* m_entries;
             };
+// #endif
 
             static process_result execute_no_transition(Fsm&, int, int, const Event&)
             {
                 return process_result::HANDLED_FALSE;
             }
 
-            // initialize the dispatch table for a given Event and Fsm
-            event_dispatch_table()
+            // Class used to build a chain of transitions for a given event and state.
+            // Allows transition conflicts.
+            template <typename Seq, typename State>
+            class transition_chain
             {
-                // Initialize cells for no transition
-                for (size_t i=0;i<max_state+1; i++)
+              public:
+                using current_state_type = State;
+                using transition_event = Event;
+
+                static process_result execute(Fsm& fsm, int region_index, int state, Event const& evt)
                 {
-                    entries[i] = &execute_no_transition;
+                    transition_call call = evaluate(fsm, region_index, state, evt);
+                    if (call.evaluated_result == process_result::HANDLED_TRUE && call.execute)
+                    {
+                        return (call.execute)(fsm, region_index, state, evt);
+                    }
+                    return call.evaluated_result;
                 }
 
-                // build chaining rows for rows coming from the same state and the current event
-                // first we build a map of sequence for every source
-                // in reverse order so that the frow's are handled first (UML priority)
-                typedef mp11::mp_fold<
-                    mp11::mp_copy_if<
-                        to_mp_list_t<Stt>,
-                        event_filter_predicate
-                        >,
-                    mp11::mp_list<>,
-                    map_updater
-                    > map_of_row_seq;
-                // and then build chaining rows for all source states having more than 1 row
-                typedef mp11::mp_transform<
-                    row_chainer,
-                    map_of_row_seq
-                    > chained_rows;
+                static transition_call evaluate(Fsm& fsm, int region_index, int state, Event const& evt)
+                {
+                    return evaluate_helper::template evaluate<Seq>(fsm,region_index,state,evt,
+                        mp11::mp_to_bool<mpl::empty<Seq>>{});
+                }
 
-                // Go back and fill in cells for matching transitions.
-// MSVC crashes when using get_init_cells.
-#if !defined(_MSC_VER)
-                typedef mp11::mp_transform<
-                    preprocess_row,
-                    chained_rows
-                    > chained_and_preprocessed_rows;
-                event_cell_initializer::init(
-                    reinterpret_cast<generic_cell*>(entries),
-                    get_init_cells<event_cell, chained_and_preprocessed_rows>(),
-                    mp11::mp_size<chained_and_preprocessed_rows>::value
-                    );
-#else
-                mp11::mp_for_each<chained_rows>(row_init_helper{entries});
-#endif
-            }
-            
-            // class used to build a chain (or sequence) of transitions for a given event and start state
-            // (like an UML diamond). Allows transition conflicts.
-            template< typename Seq,typename AnEvent,typename State >
-            struct chain_row
-            {
-                typedef State   current_state_type;
-                typedef AnEvent transition_event;
-
-                // helper for building a disable/enable_if-controlled execute function
-                struct execute_helper
+              private:
+                struct evaluate_helper
                 {
                     template <class Sequence>
-                    static
-                    HandledEnum
-                    execute(Fsm& , int, int, Event const& , ::boost::mpl::true_ const & )
+                    static transition_call evaluate(Fsm&, int, int, Event const&, mp11::mp_true)
                     {
                         // if at least one guard rejected, this will be ignored, otherwise will generate an error
-                        return HandledEnum::HANDLED_FALSE;
+                        return {process_result::HANDLED_FALSE, nullptr};
                     }
 
                     template <class Sequence>
-                    static
-                    HandledEnum
-                    execute(Fsm& fsm, int region_index , int state, Event const& evt,
-                            ::boost::mpl::false_ const & )
+                    static transition_call evaluate(
+                        Fsm& fsm, int region_index, int state, Event const& evt, mp11::mp_false)
                     {
-                        // try the first guard
-                        typedef typename ::boost::mpl::front<Sequence>::type first_row;
-                        HandledEnum res = first_row::execute(fsm,region_index,state,evt);
-                        if (HandledEnum::HANDLED_TRUE!=res && HandledEnum::HANDLED_DEFERRED!=res)
+                        using first_transition = typename mpl::front<Sequence>::type;
+                        process_result result{};
+                        // TODO: Proper evaluation
+                        if constexpr (has_is_frow<first_transition>::value)
                         {
-                            // if the first rejected, move on to the next one
-                            HandledEnum sub_res = 
-                                execute<typename ::boost::mpl::pop_front<Sequence>::type>(fsm,region_index,state,evt,
-                                    ::boost::mpl::bool_<
-                                        ::boost::mpl::empty<typename ::boost::mpl::pop_front<Sequence>::type>::type::value>());
-                            // if at least one guards rejects, the event will not generate a call to no_transition
-                            if ((HandledEnum::HANDLED_FALSE==sub_res) && (HandledEnum::HANDLED_GUARD_REJECT==res) )
-                                return HandledEnum::HANDLED_GUARD_REJECT;
-                            else
-                                return sub_res;
+                            result = first_transition::execute(fsm, region_index, state, evt);
+                            if (result & handled_or_deferred)
+                            {
+                                return {result, nullptr};
+                            }
                         }
-                        return res;
+                        else
+                        {
+                            result = first_transition::get_process_result(fsm, region_index, state, evt);
+                            if (result & handled_or_deferred)
+                            {
+                                if constexpr (is_kleene_event<typename first_transition::transition_event>::value)
+                                {
+                                    return {result, &convert_event_and_new_execute<first_transition>};
+                                }
+                                else
+                                {
+                                    return {result, &first_transition::new_execute};
+                                }
+                            }
+                        }
+                        // If the first transition does not handle the event, try the others.
+                        using remaining_transitions = typename mpl::pop_front<Sequence>::type;
+                        transition_call sub_res = 
+                            evaluate<remaining_transitions>(fsm, region_index, state, evt,
+                                mp11::mp_to_bool<mpl::empty<remaining_transitions>>{});
+                        if (sub_res.evaluated_result & handled_or_deferred)
+                        {
+                            return sub_res;
+                        }
+                        // If at least one guard was present, the event shall not lead to a no_transition call.
+                        sub_res.evaluated_result |= result;
+                        return sub_res;
                     }
                 };
-                // Take the transition action and return the next state.
-                static HandledEnum execute(Fsm& fsm, int region_index, int state, Event const& evt)
-                {
-                    // forward to helper
-                    return execute_helper::template execute<Seq>(fsm,region_index,state,evt,
-                        ::boost::mpl::bool_< ::boost::mpl::empty<Seq>::type::value>());
-                }
             };
+
             // nullary metafunction whose only job is to prevent early evaluation of _1
             template< typename Entry > 
             struct make_chain_row_from_map_entry
@@ -390,9 +395,9 @@ struct compile_policy_impl<favor_runtime_speed>
                     ::boost::mpl::identity<typename Entry::second>
                 >::type filtered_stt;
 
-                typedef chain_row<filtered_stt,Event,
-                    typename Entry::first > type;
+                typedef transition_chain<filtered_stt, typename Entry::first> type;
             }; 
+
             // helper for lazy evaluation in eval_if of change_frow_event
             template <class Transition,class NewEvent>
             struct replace_event
@@ -411,16 +416,26 @@ struct compile_policy_impl<favor_runtime_speed>
                 >::type type;
             };
 
-            template <class Row>
-            struct convert_event_and_forward
+          // TODO:
+          // Not sure why this has to be public, check later.
+          // Maybe related to MSVC bug and we can get rid of the other code...
+          public:
+            // Converts the event to a Kleene event prior to execution.
+            template <typename Row>
+            static process_result convert_event_and_execute(Fsm& fsm, int region_index, int state, Event const& evt)
             {
-                static HandledEnum execute(Fsm& fsm, int region_index, int state, Event const& evt)
-                {
-                    typename Row::transition_event forwarded(evt);
-                    return Row::execute(fsm,region_index,state,forwarded);
-                }
-            };
+                typename Row::transition_event forwarded(evt);
+                return Row::execute(fsm,region_index,state,forwarded);
+            }
 
+            template <typename Row>
+            static process_result convert_event_and_new_execute(Fsm& fsm, int region_index, int state, Event const& evt)
+            {
+                typename Row::transition_event forwarded(evt);
+                return Row::new_execute(fsm,region_index,state,forwarded);
+            }
+
+          private:
             using event_init_cell_value = init_cell_value<event_cell>;
 
             template<size_t v1, event_cell v2>
@@ -468,9 +483,12 @@ struct compile_policy_impl<favor_runtime_speed>
                 mp11::mp_first<T>,
                 mp11::mp_second<T>
                 >;
+            // TODO:
+            // Either adapt API of Transition to also use evaluate/execute, or
+            // remove this if condition.
             template<typename T>
             using row_chainer = mp11::mp_if_c<
-                (mp11::mp_size<to_mp_list_t<mp11::mp_second<T>>>::value > 1),
+                true,
                 // we need row chaining
                 typename make_chain_row_from_map_entry<to_mpl_map_entry<T>>::type,
                 // just one row, no chaining, we rebuild the row like it was before
@@ -486,15 +504,62 @@ struct compile_policy_impl<favor_runtime_speed>
                 mp11::mp_eval_if_c<
                     is_kleene_event<typename Row::transition_event>::type::value,
                     cell_constant<
-                        &convert_event_and_forward<Row>::execute
+                        &convert_event_and_execute<Row>
                         >,
                     preprocess_row_helper,
                     Row
                     >::value
                 >;
 
-        // data members
-        public:
+            // Initialize the dispatch table.
+            event_dispatch_table()
+            {
+                // Initialize cells for no transition
+                for (size_t i=0;i<max_state+1; i++)
+                {
+                    entries[i] = &execute_no_transition;
+                }
+
+                // build chaining rows for rows coming from the same state and the current event
+                // first we build a map of sequence for every source
+                // in reverse order so that the frow's are handled first (UML priority)
+                typedef mp11::mp_fold<
+                    mp11::mp_copy_if<
+                        to_mp_list_t<Stt>,
+                        event_filter_predicate
+                        >,
+                    mp11::mp_list<>,
+                    map_updater
+                    > map_of_row_seq;
+                // and then build chaining rows for all source states having more than 1 row
+                typedef mp11::mp_transform<
+                    row_chainer,
+                    map_of_row_seq
+                    > chained_rows;
+
+                // Go back and fill in cells for matching transitions.
+// MSVC crashes when using get_init_cells.
+#if !defined(_MSC_VER)
+                typedef mp11::mp_transform<
+                    preprocess_row,
+                    chained_rows
+                    > chained_and_preprocessed_rows;
+                event_cell_initializer::init(
+                    reinterpret_cast<generic_cell*>(entries),
+                    get_init_cells<event_cell, chained_and_preprocessed_rows>(),
+                    mp11::mp_size<chained_and_preprocessed_rows>::value
+                    );
+#else
+                mp11::mp_for_each<chained_rows>(row_init_helper{entries});
+#endif
+            }
+
+            // The singleton instance.
+            static const event_dispatch_table& instance() {
+                static event_dispatch_table table;
+                return table;
+            }
+
             // max_state+1, because 0 is reserved for this fsm (internal transitions)
             event_cell entries[max_state+1];
         };

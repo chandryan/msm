@@ -53,6 +53,10 @@ using detail::is_composite;
 namespace detail
 {
 
+// Bitmask for process result checks.
+static constexpr process_result handled_or_deferred =
+    process_result::HANDLED_TRUE | process_result::HANDLED_DEFERRED;
+
 template <
     class FrontEnd,
     class Config,
@@ -250,13 +254,12 @@ class state_machine_base : public FrontEnd
                         ::boost::mpl::identity<T2> >
             >::type next_state_type;
 
-            // Take the transition action and return the next state.
-            static process_result execute(state_machine_base& sm, int region_index, int state, transition_event const& event)
+            // Checks what the result of processing would be if the transition was executed.
+            static process_result get_process_result(
+                state_machine_base& sm,
+                [[maybe_unused]] int& state_id, transition_event const& event)
             {
-                BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<current_state_type>()));
-                BOOST_STATIC_CONSTANT(int, next_state = (get_state_id<next_state_type>()));
-                boost::ignore_unused(state); // Avoid warnings if BOOST_ASSERT expands to nothing.
-                BOOST_ASSERT(state == (current_state));
+                BOOST_ASSERT(state_id == get_state_id<current_state_type>());
                 // if T1 is an exit pseudo state, then take the transition only if the pseudo exit state is active
                 if (has_pseudo_exit<T1>::type::value &&
                     !sm.is_exit_state_active<T1, get_owner<T1,derived_t>>())
@@ -272,21 +275,46 @@ class state_machine_base : public FrontEnd
                     // guard rejected the event, we stay in the current one
                     return process_result::HANDLED_GUARD_REJECT;
                 }
-                sm.m_active_state_ids[region_index] = active_state_switching::after_guard(current_state,next_state);
+
+                // TODO:
+                // Here we need to find out whether the action handles or defers.
+                return process_result::HANDLED_TRUE;
+            }
+
+            // Old behavior, checks guard and then conditionally executes the transition.
+            static process_result execute(state_machine_base& sm, int region_index, int state, transition_event const& event)
+            {
+                process_result result = get_process_result(sm, region_index, state, event);
+                if (result != process_result::HANDLED_TRUE)
+                {
+                    return result;
+                }
+                return new_execute(sm, region_index, state, event);
+            }
+
+            // Take the transition action and set the next state.
+            static process_result new_execute(state_machine_base& sm, int& state_id, transition_event const& event)
+            {
+                BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<current_state_type>()));
+                BOOST_STATIC_CONSTANT(int, next_state = (get_state_id<next_state_type>()));
+                auto& source = sm.get_state<current_state_type>();
+                auto& target = sm.get_state<next_state_type>();
+
+                state_id = active_state_switching::after_guard(current_state,next_state);
 
                 // first call the exit method of the current state
                 source.on_exit(event, sm.get_fsm_argument());
-                sm.m_active_state_ids[region_index] = active_state_switching::after_exit(current_state,next_state);
+                state_id = active_state_switching::after_exit(current_state,next_state);
 
                 // then call the action method
-                process_result res = call_action_or_true<Row, HasAction>(sm, event, source, target);
-                sm.m_active_state_ids[region_index] = active_state_switching::after_action(current_state,next_state);
+                process_result result = call_action_or_true<Row, HasAction>(sm, event, source, target);
+                state_id = active_state_switching::after_action(current_state,next_state);
 
                 // and finally the entry method of the new current state
                 convert_event_and_execute_entry<T2>(target,event,sm);
-                sm.m_active_state_ids[region_index] = active_state_switching::after_entry(current_state,next_state);
+                state_id = active_state_switching::after_entry(current_state,next_state);
 
-                return res;
+                return result;
             }
         };
 
@@ -299,13 +327,12 @@ class state_machine_base : public FrontEnd
             typedef State current_state_type;
             typedef current_state_type next_state_type;
 
-            // Take the transition action and return the next state.
-            static process_result execute(state_machine_base& sm, int , int state, transition_event const& event)
+            // Checks what the result of processing would be if the transition was executed.
+            static process_result get_process_result(
+                state_machine_base& sm, int /*region_index*/,
+                [[maybe_unused]] int& state_id, transition_event const& event)
             {
-
-                BOOST_STATIC_CONSTANT(int, current_state = (get_state_id<current_state_type>()));
-                boost::ignore_unused(state, current_state); // Avoid warnings if BOOST_ASSERT expands to nothing.
-                BOOST_ASSERT(state == (current_state));
+                BOOST_ASSERT(state_id == get_state_id<current_state_type>());
 
                 auto& source = sm.get_state<current_state_type>();
                 auto& target = source;
@@ -316,7 +343,28 @@ class state_machine_base : public FrontEnd
                     return process_result::HANDLED_GUARD_REJECT;
                 }
 
+                // TODO:
+                // Here we need to find out whether the action handles or defers.
+                return process_result::HANDLED_TRUE;
+            }
+
+            // Old behavior, checks guard and then conditionally executes the transition.
+            static process_result execute(state_machine_base& sm, int region_index, int state, transition_event const& event)
+            {
+                process_result result = get_process_result(sm, region_index, state, event);
+                if (result != process_result::HANDLED_TRUE)
+                {
+                    return result;
+                }
+                return new_execute(sm, region_index, state, event);
+            }
+
+            // Take the transition action and set the next state.
+            static process_result new_execute(state_machine_base& sm, int /*region_index*/, int /*state*/, transition_event const& event)
+            {
                 // call the action method
+                auto& source = sm.get_state<current_state_type>();
+                auto& target = source;
                 return call_action_or_true<Row, HasAction>(sm, event, source, target);
             }
         };
@@ -629,6 +677,175 @@ class state_machine_base : public FrontEnd
         using state_visitor = state_visitor<const state_machine_base, Visitor, Mode, Predicate>;
         state_visitor::visit(*this, std::forward<Visitor>(visitor));
     }
+
+    template<class Event>
+    static process_result call_process_event(state_machine_base& sm, Event const& event)
+    {
+        return sm.process_event(event);
+    }
+
+    template <class Event,
+              bool C = events_queue_member::value,
+              typename = std::enable_if_t<C>>
+    static process_result call_enqueue_event(state_machine_base& sm, int&, Event const& event)
+    {
+        sm.enqueue_event(event);
+        return process_result::HANDLED_TRUE;
+    }
+
+    template <
+        class Event,
+        bool C = deferred_events_member::value,
+        typename = std::enable_if_t<C>>
+    static process_result call_defer_event(state_machine_base& sm, int&, Event const& event)
+    {
+        sm.defer_event(event);
+        return process_result::HANDLED_DEFERRED;
+    }
+
+    template <typename Event>
+    static process_result call_preprocess_event(state_machine_base& sm, int&, const Event& event)
+    {
+        return sm.process_event(event);
+    }
+
+    template <typename Event>
+    static process_result call_process_preprocessed_event(state_machine_base& sm, int&, const Event& event)
+    {
+        return sm.process_preprocessed_event(event);
+    }
+
+    // Evaluate an event for processing.
+    // TODO:
+    // Check later if it makes sense to keep a direct process function.
+    template <typename Event>
+    transition_call preprocess_event(const Event& event)
+    {
+        return preprocess_event_impl(compile_policy_impl::normalize_event(event));
+    }
+    template <typename Event>
+    transition_call preprocess_event_impl(const Event& event)
+    {
+        m_preprocessed_event.execute_calls.clear();
+        
+        // If the state machine has terminate or interrupt flags, check them.
+        if constexpr (mp11::mp_any_of<state_set, is_state_blocking_t>::value)
+        {
+            // If the state machine is terminated, do not handle any event.
+            if (is_flag_active<TerminateFlag>())
+            {
+                return {process_result::HANDLED_TRUE, nullptr};
+            }
+            // If the state machine is interrupted, do not handle any event
+            // unless the event is the end interrupt event.
+            if (is_flag_active<InterruptedFlag>() && !is_end_interrupt_event(event))
+            {
+                return {process_result::HANDLED_TRUE, nullptr};
+            }
+        }
+
+        // If we have an event queue and are already processing events,
+        // enqueue it for later processing.
+        if constexpr (events_queue_member::value)
+        {
+            if (m_event_processing)
+            {
+                return {process_result::HANDLED_TRUE, reinterpret_cast<void(*)()>(&call_enqueue_event<Event>)};
+            }
+        }
+
+        // If deferred events are configured and the event is to be deferred
+        // in the active state configuration, then defer it for later processing.
+        if constexpr (has_any_deferred_event::value)
+        {
+            if (compile_policy_impl::is_event_deferred(*this, event))
+            {
+                // Deferral is reported as HANDLED_TRUE to the caller so this
+                // result does not compete with other transitions in orthogonal regions
+                // (the SM puts the event into its own deferred events queue).
+                return {process_result::HANDLED_TRUE, &call_defer_event<Event>};
+            }
+        }
+
+        // Check if the event will be handled.
+        // TODO:
+        // Internal transition table.
+        process_result result;
+        for (size_t region_id=0; region_id < nr_regions; region_id++)
+        {
+            int& state_id = m_active_state_ids[region_id];
+            transition_call call = sm_dispatch_table::evaluate(
+                *this, state_id, event);
+            if (call.evaluated_result == process_result::HANDLED_TRUE)
+            {
+                m_preprocessed_event.execute_calls.push_back({
+                    reinterpret_cast<void(*)()>(call.execute),
+                    &state_id});
+            }
+            result |= call.evaluated_result;
+        }
+
+        if constexpr (deferred_events_member::value)
+        {
+            // The event will be deferred.
+            if (result & process_result::HANDLED_DEFERRED)
+            {
+                // Deferral is reported as HANDLED_TRUE to the caller so this
+                // result does not compete with other transitions in orthogonal regions
+                // (the SM puts the event into its own deferred events queue).
+                return {process_result::HANDLED_TRUE, reinterpret_cast<void(*)()>(&call_defer_event<Event>)};
+            }
+        }
+
+        // The event will be processed.
+        if (result & process_result::HANDLED_TRUE)
+        {
+            return {process_result::HANDLED_TRUE, reinterpret_cast<void(*)()>(&call_process_preprocessed_event<Event>)};
+        }
+
+        // The event will not be handled (HANDLED_FALSE or HANDLED_GUARD_REJCT).
+        return {result, nullptr};
+    }
+
+    template <typename Event>
+    process_result process_preprocessed_event(const Event& event)
+    {
+        return process_preprocessed_event_impl(compile_policy_impl::normalize_event(event));
+    }
+    template <typename Event>
+    process_result process_preprocessed_event_impl(const Event& event)
+    {
+        process_result result{};
+        using execute_call = typename preprocessed_event::execute_call;
+        for (execute_call& execute_call : m_preprocessed_event.execute_calls)
+        {
+            using real_function = process_result (*)(state_machine_base&, int&, const Event&);
+            result |= 
+                reinterpret_cast<real_function>(execute_call.function)(*this, *execute_call.state_id, event);
+        }
+        return result;
+    }
+
+    struct preprocessed_event
+    {
+        preprocessed_event()
+        {
+            execute_calls.reserve(nr_regions);
+        }
+
+        struct execute_call
+        {
+            void(*function)();
+            int* state_id;
+        };
+
+        // The result as reported back to the caller.
+        process_result result;
+        // All necessary calls to the transitions' execute functions.
+        std::vector<execute_call> execute_calls;
+    };
+
+    preprocessed_event m_preprocessed_event;
     
   public:
     // Construct and forward constructor arguments to the front-end.
@@ -1157,51 +1374,24 @@ class state_machine_base : public FrontEnd
     template<class Event>
     process_result process_event_internal_impl(Event const& event, EventSource source)
     {
-        // If the state machine has terminate or interrupt flags, check them.
-        if constexpr (mp11::mp_any_of<state_set, is_state_blocking_t>::value)
+        transition_call call = preprocess_event_impl(event);
+        if (call.evaluated_result & handled_or_deferred)
         {
-            // If the state machine is terminated, do not handle any event.
-            if (is_flag_active<TerminateFlag>())
-            {
-                return process_result::HANDLED_TRUE;
-            }
-            // If the state machine is interrupted, do not handle any event
-            // unless the event is the end interrupt event.
-            if (is_flag_active<InterruptedFlag>() && !is_end_interrupt_event(event))
-            {
-                return process_result::HANDLED_TRUE;
-            }
+            // TODO: Process preprocessed event instead.
+            return do_process_event(event, source);
         }
+        return call.evaluated_result;
+    }
 
-        // If we have an event queue and are already processing events,
-        // enqueue it for later processing.
-        if constexpr (events_queue_member::value)
-        {
-            if (m_event_processing)
-            {
-                enqueue_event(event);
-                return process_result::HANDLED_TRUE;
-            }
-        }
-
-        // If deferred events are configured and the event is to be deferred
-        // in the active state configuration, then defer it for later processing.
-        if constexpr (has_any_deferred_event::value)
-        {
-            if (compile_policy_impl::is_event_deferred(*this, event))
-            {
-                compile_policy_impl::defer_event(*this, event);
-                return process_result::HANDLED_DEFERRED;
-            }
-        }
-
-        // Process the event.
+    template<class Event>
+    process_result do_process_event(Event const& event, EventSource source)
+    {
         m_event_processing = true;
-        process_result handled;
+        process_result result;
         const bool is_direct_call = source & EventSource::EVENT_SOURCE_DIRECT;
         if constexpr (has_no_exception_thrown<front_end_t>::value)
         {
-            handled = do_process_event(event, is_direct_call);
+            result = do_process_event_impl(event, is_direct_call);
         }
         else
         {
@@ -1211,13 +1401,13 @@ class state_machine_base : public FrontEnd
             std::exception e;
             BOOST_TRY
             {
-                handled = do_process_event(event, is_direct_call);
+                result = do_process_event_impl(event, is_direct_call);
             }
             BOOST_CATCH (std::exception& e)
             {
                 // give a chance to the concrete state machine to handle
                 this->exception_caught(event, get_fsm_argument(), e);
-                handled = process_result::HANDLED_FALSE;
+                result = process_result::HANDLED_FALSE;
             }
             BOOST_CATCH_END
         }
@@ -1226,9 +1416,58 @@ class state_machine_base : public FrontEnd
         // so that completion events and deferred events execute now (if any)
         m_event_processing = false;
 
+        postprocess_event(source, result);
+
+        return result;
+    }
+
+    // minimum event processing without exceptions, queues, etc.
+    template<class Event>
+    process_result do_process_event_impl(Event const& event, bool is_direct_call)
+    {
+        if constexpr (deferred_events_member::value)
+        {
+            if (is_direct_call)
+            {
+                get_deferred_events().cur_seq_cnt += 1;
+            }
+        }
+
+        process_result result = process_result::HANDLED_FALSE;
+        // Dispatch the event to every region.
+        for (int region_id=0; region_id<nr_regions; region_id++)
+        {
+            result |= sm_dispatch_table::dispatch(
+                *this, m_active_state_ids[region_id], event);
+        }
+        // Process the event in the internal table of this fsm 
+        // if the event is processable (present in the table).
+        if constexpr (mp11::mp_set_contains<processable_events_internal_table,Event>::value)
+        {
+            result |= sm_dispatch_table::dispatch_internal(*this, event);
+        }
+
+        // if the event has not been handled and we have orthogonal zones, then
+        // generate an error on every active state
+        // for state machine states contained in other state machines, do not handle
+        // but let the containing sm handle the error, unless the event was generated in this fsm
+        // (by calling process_event on this fsm object, is_direct_call == true)
+        // completion events do not produce an error
+        if ((!is_contained() || is_direct_call) && !result && !compile_policy_impl::is_completion_event(event))
+        {
+            for (const auto state_id: m_active_state_ids)
+            {
+                this->no_transition(event, get_fsm_argument(), state_id);
+            }
+        }
+        return result;
+    }
+
+    void postprocess_event(EventSource source, process_result result)
+    {
         // Process completion transitions BEFORE any other event in the
         // pool (UML Standard 2.3 15.3.14)
-        try_process_completion_event(source, (handled & process_result::HANDLED_TRUE));
+        try_process_completion_event(source, (result & process_result::HANDLED_TRUE));
 
         // After handling, take care of the queued and deferred events.
         // Default:
@@ -1260,54 +1499,6 @@ class state_machine_base : public FrontEnd
                 }
             }
         }
-
-        return handled;
-    }
-
-    // minimum event processing without exceptions, queues, etc.
-    template<class Event>
-    process_result do_process_event(Event const& event, bool is_direct_call)
-    {
-        if constexpr (deferred_events_member::value)
-        {
-            if (is_direct_call)
-            {
-                get_deferred_events().cur_seq_cnt += 1;
-            }
-        }
-
-        process_result handled = process_result::HANDLED_FALSE;
-        // Dispatch the event to every region.
-        for (int region_id=0; region_id<nr_regions; region_id++)
-        {
-            handled = static_cast<process_result>(
-                static_cast<int>(handled) |
-                static_cast<int>(sm_dispatch_table::dispatch(*this, region_id, m_active_state_ids[region_id], event))
-            );
-        }
-        // Process the event in the internal table of this fsm if the event is processable (present in the table).
-        if constexpr (mp11::mp_set_contains<processable_events_internal_table,Event>::value)
-        {
-            handled = static_cast<process_result>(
-                static_cast<int>(handled) |
-                static_cast<int>(sm_dispatch_table::dispatch_internal(*this, 0, m_active_state_ids[0], event))
-            );
-        }
-
-        // if the event has not been handled and we have orthogonal zones, then
-        // generate an error on every active state
-        // for state machine states contained in other state machines, do not handle
-        // but let the containing sm handle the error, unless the event was generated in this fsm
-        // (by calling process_event on this fsm object, is_direct_call == true)
-        // completion events do not produce an error
-        if ((!is_contained() || is_direct_call) && !handled && !compile_policy_impl::is_completion_event(event))
-        {
-            for (const auto state_id: m_active_state_ids)
-            {
-                this->no_transition(event, get_fsm_argument(), state_id);
-            }
-        }
-        return handled;
     }
 
 private:
