@@ -1145,17 +1145,18 @@ class state_machine_base : public FrontEnd
 
     // Main function used internally to make transitions
     // Can only be called for internally (for example in an action method) generated events.
-    template<class Event>
-    process_result process_event_internal(Event const& event,
-                           EventSource source = EventSource::EVENT_SOURCE_DEFAULT)
+    template <class Event>
+    process_result process_event_internal(
+        Event const& event,
+        EventSource source = EventSource::EVENT_SOURCE_DEFAULT)
     {
-        // The compile policy decides whether the event needs to be wrapped or not.
-        // After wrapping it should call back process_event_internal_impl.
-        return compile_policy_impl::process_event_internal(*this, event, source);
+        return process_event_internal_impl(
+            compile_policy_impl::normalize_event(event), source);
     }
 
-    template<class Event>
-    process_result process_event_internal_impl(Event const& event, EventSource source)
+    template <class Event>
+    process_result process_event_internal_impl(Event const& event,
+                                               EventSource source)
     {
         // If the state machine has terminate or interrupt flags, check them.
         if constexpr (mp11::mp_any_of<state_set, is_state_blocking_t>::value)

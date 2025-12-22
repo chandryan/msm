@@ -56,10 +56,10 @@ struct compile_policy_impl<favor_runtime_speed>
         return sm.template is_flag_active<EndInterruptFlag<Event>>();
     }
 
-    template <typename StateMachine, typename Event>
-    static process_result process_event_internal(StateMachine& sm, const Event& event, EventSource source)
+    template <typename Event>
+    constexpr static const Event& normalize_event(const Event& event)
     {
-        return sm.process_event_internal_impl(event, source);
+        return event;
     }
 
     template <typename StateMachine, typename Event>
@@ -73,8 +73,7 @@ struct compile_policy_impl<favor_runtime_speed>
 
         process_result process() override
         {
-            return process_event_internal(
-                m_sm,
+            return m_sm.process_event_internal(
                 m_event,
                 EventSource::EVENT_SOURCE_DEFERRED);
         }

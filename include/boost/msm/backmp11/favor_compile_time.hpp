@@ -62,15 +62,15 @@ struct compile_policy_impl<favor_compile_time>
         return helper.is_end_interrupt_event(event);
     }
 
-    template <typename StateMachine, typename Event>
-    static process_result process_event_internal(StateMachine& sm, const Event& event, EventSource source)
+    template <typename Event>
+    static any_event normalize_event(const Event& event)
     {
-        return sm.process_event_internal_impl(any_event(event), source);
+        return any_event{event};
     }
-    template <typename StateMachine>
-    static process_result process_event_internal(StateMachine& sm, const any_event& event, EventSource source)
+
+    constexpr static const any_event& normalize_event(const any_event& event)
     {
-        return sm.process_event_internal_impl(event, source);
+        return event;
     }
 
     template <typename StateMachine>
@@ -84,8 +84,7 @@ struct compile_policy_impl<favor_compile_time>
 
         process_result process() override
         {
-            return process_event_internal(
-                m_sm,
+            return m_sm.process_event_internal(
                 m_event,
                 EventSource::EVENT_SOURCE_DEFERRED);
         }
