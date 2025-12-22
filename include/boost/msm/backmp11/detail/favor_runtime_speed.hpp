@@ -234,33 +234,6 @@ struct compile_policy_impl<favor_runtime_speed>
             }
 
         private:
-            // A function object for use with mp11::mp_for_each that stuffs transitions into cells.
-            class row_init_helper
-            {
-            public:
-                row_init_helper(event_cell* entries)
-                    : m_entries(entries) {}
-
-                template<typename Row>
-                typename ::boost::disable_if<typename is_kleene_event<typename Row::transition_event>::type, void>::type
-                    operator()(Row)
-                {
-                    m_entries[get_table_index<Fsm, typename Row::current_state_type>::value] =
-                        &Row::execute;
-                }
-
-                template<typename Row>
-                typename ::boost::enable_if<typename is_kleene_event<typename Row::transition_event>::type, void>::type
-                    operator()(Row)
-                {
-                    m_entries[get_table_index<Fsm, typename Row::current_state_type>::value] =
-                        &convert_event_and_forward<Row>::execute;
-                }
-
-            private:
-                event_cell* m_entries;
-            };
-
             static process_result execute_no_transition(Fsm&, int, int, const Event&)
             {
                 return process_result::HANDLED_FALSE;
@@ -293,8 +266,6 @@ struct compile_policy_impl<favor_runtime_speed>
                     > chained_rows;
 
                 // Go back and fill in cells for matching transitions.
-// MSVC crashes when using get_init_cells.
-#if !defined(_MSC_VER)
                 typedef mp11::mp_transform<
                     preprocess_row,
                     chained_rows
@@ -304,9 +275,6 @@ struct compile_policy_impl<favor_runtime_speed>
                     get_init_cells<event_cell, chained_and_preprocessed_rows>(),
                     mp11::mp_size<chained_and_preprocessed_rows>::value
                     );
-#else
-                mp11::mp_for_each<chained_rows>(row_init_helper{entries});
-#endif
             }
             
             // class used to build a chain (or sequence) of transitions for a given event and start state
