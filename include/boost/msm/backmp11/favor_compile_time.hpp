@@ -63,12 +63,12 @@ struct compile_policy_impl<favor_compile_time>
     }
 
     template <typename StateMachine, typename Event>
-    static HandledEnum process_event_internal(StateMachine& sm, const Event& event, EventSource source)
+    static process_result process_event_internal(StateMachine& sm, const Event& event, EventSource source)
     {
         return sm.process_event_internal_impl(any_event(event), source);
     }
     template <typename StateMachine>
-    static HandledEnum process_event_internal(StateMachine& sm, const any_event& event, EventSource source)
+    static process_result process_event_internal(StateMachine& sm, const any_event& event, EventSource source)
     {
         return sm.process_event_internal_impl(event, source);
     }
@@ -193,18 +193,18 @@ struct compile_policy_impl<favor_compile_time>
     struct chain_row
     {
         template<typename Fsm>
-        HandledEnum operator()(Fsm& fsm, int region, int state, any_event const& evt) const
+        process_result operator()(Fsm& fsm, int region, int state, any_event const& evt) const
         {
-            typedef HandledEnum (*real_cell)(Fsm&, int, int, any_event const&);
-            HandledEnum res = HandledEnum::HANDLED_FALSE;
+            typedef process_result (*real_cell)(Fsm&, int, int, any_event const&);
+            process_result res = process_result::HANDLED_FALSE;
             typename std::deque<generic_cell>::const_iterator it = one_state.begin();
-            while (it != one_state.end() && (res != HandledEnum::HANDLED_TRUE && res != HandledEnum::HANDLED_DEFERRED ))
+            while (it != one_state.end() && (res != process_result::HANDLED_TRUE && res != process_result::HANDLED_DEFERRED ))
             {
                 auto fnc = reinterpret_cast<real_cell>(*it);
-                HandledEnum handled = (*fnc)(fsm,region,state,evt);
+                process_result handled = (*fnc)(fsm,region,state,evt);
                 // reject is considered as erasing an error (HANDLED_FALSE)
-                if ((HandledEnum::HANDLED_FALSE==handled) && (HandledEnum::HANDLED_GUARD_REJECT==res) )
-                    res = HandledEnum::HANDLED_GUARD_REJECT;
+                if ((process_result::HANDLED_FALSE==handled) && (process_result::HANDLED_GUARD_REJECT==res) )
+                    res = process_result::HANDLED_GUARD_REJECT;
                 else
                     res = handled;
                 ++it;
@@ -224,13 +224,13 @@ struct compile_policy_impl<favor_compile_time>
         using Stt = typename Fsm::complete_table;
     public:
         // Dispatch an event.
-        static HandledEnum dispatch(Fsm& fsm, int region_id, int state_id, const any_event& event)
+        static process_result dispatch(Fsm& fsm, int region_id, int state_id, const any_event& event)
         {
             return instance().m_state_dispatch_tables[state_id+1].dispatch(fsm, region_id, state_id, event);
         }
 
         // Dispatch an event to the FSM's internal table.
-        static HandledEnum dispatch_internal(Fsm& fsm, int region_id, int state_id, const any_event& event)
+        static process_result dispatch_internal(Fsm& fsm, int region_id, int state_id, const any_event& event)
         {
             return instance().m_state_dispatch_tables[0].dispatch(fsm, region_id, state_id, event);
         }
@@ -238,7 +238,7 @@ struct compile_policy_impl<favor_compile_time>
     private:
         // Adapter for calling a row's execute function.
         template<typename Event, typename Row>
-        static HandledEnum convert_and_execute(Fsm& fsm, int region_id, int state_id, const any_event& event)
+        static process_result convert_and_execute(Fsm& fsm, int region_id, int state_id, const any_event& event)
         {
             return Row::execute(fsm, region_id, state_id, *any_cast<Event>(&event));
         }
@@ -264,9 +264,9 @@ struct compile_policy_impl<favor_compile_time>
             }
 
             // Dispatch an event.
-            HandledEnum dispatch(Fsm& fsm, int region_id, int state_id, const any_event& event) const
+            process_result dispatch(Fsm& fsm, int region_id, int state_id, const any_event& event) const
             {
-                HandledEnum handled = HandledEnum::HANDLED_FALSE;
+                process_result handled = process_result::HANDLED_FALSE;
                 if (m_call_submachine)
                 {
                     handled = m_call_submachine(fsm, event);
@@ -286,7 +286,7 @@ struct compile_policy_impl<favor_compile_time>
         private:
             std::unordered_map<std::type_index, chain_row> m_entries;
             // Special functor if the state is a composite
-            std::function<HandledEnum(Fsm&, const any_event&)> m_call_submachine;
+            std::function<process_result(Fsm&, const any_event&)> m_call_submachine;
         };
 
         dispatch_table()

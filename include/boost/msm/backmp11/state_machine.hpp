@@ -1280,18 +1280,12 @@ class state_machine_base : public FrontEnd
         // Dispatch the event to every region.
         for (int region_id=0; region_id<nr_regions; region_id++)
         {
-            handled = static_cast<process_result>(
-                static_cast<int>(handled) |
-                static_cast<int>(sm_dispatch_table::dispatch(*this, region_id, m_active_state_ids[region_id], event))
-            );
+            handled |= sm_dispatch_table::dispatch(*this, region_id, m_active_state_ids[region_id], event);
         }
         // Process the event in the internal table of this fsm if the event is processable (present in the table).
         if constexpr (mp11::mp_set_contains<processable_events_internal_table,Event>::value)
         {
-            handled = static_cast<process_result>(
-                static_cast<int>(handled) |
-                static_cast<int>(sm_dispatch_table::dispatch_internal(*this, 0, m_active_state_ids[0], event))
-            );
+            handled |= sm_dispatch_table::dispatch_internal(*this, 0, m_active_state_ids[0], event);
         }
 
         // if the event has not been handled and we have orthogonal zones, then
