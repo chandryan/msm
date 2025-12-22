@@ -21,9 +21,10 @@
 #include <boost/msm/front/completion_event.hpp>
 #include <boost/msm/backmp11/detail/metafunctions.hpp>
 #include <boost/msm/backmp11/detail/dispatch_table.hpp>
+#include <boost/msm/backmp11/common_types.hpp>
 #include <boost/msm/backmp11/event_traits.hpp>
 
-#define BOOST_MSM_BACKMP11_GENERATE_STATE_MACHINE(smname)                      \
+#define BOOST_MSM_BACKMP11_GENERATE_STATE_MACHINE(smname)                       \
     template<>                                                                  \
     const smname::sm_dispatch_table& smname::sm_dispatch_table::instance()      \
     {                                                                           \
@@ -49,6 +50,16 @@ template <>
 struct compile_policy_impl<favor_compile_time>
 {
     using add_forwarding_rows = mp11::mp_false;
+
+    struct transition_methods
+    {
+        void (*get_process_result)();
+        void (*execute)();
+    };
+
+    // Bitmask for process result checks.
+    static constexpr process_result handled_or_deferred =
+        process_result::HANDLED_TRUE | process_result::HANDLED_DEFERRED;
 
     static bool is_completion_event(const any_event& event)
     {
@@ -189,103 +200,161 @@ struct compile_policy_impl<favor_compile_time>
         map m_is_flag_active_functions;
     };
 
-    struct chain_row
+    // Class used to build a chain of transitions for a given event and state
+    // Allows transition conflicts.
+    class transition_chain
     {
-        template<typename Fsm>
-        process_result operator()(Fsm& fsm, int region, int state, any_event const& evt) const
+      public:
+        template<typename StateMachine>
+        transition_call evaluate(StateMachine& sm, int& state_id, any_event const& evt) const
         {
-            typedef process_result (*real_cell)(Fsm&, int, int, any_event const&);
-            process_result res = process_result::HANDLED_FALSE;
-            typename std::deque<generic_cell>::const_iterator it = one_state.begin();
-            while (it != one_state.end() && (res != process_result::HANDLED_TRUE && res != process_result::HANDLED_DEFERRED ))
+            using real_cell = process_result (*)(StateMachine&, int&, const any_event&);
+            process_result result = process_result::HANDLED_FALSE;
+            for (const auto& transition: m_transitions)
             {
-                auto fnc = reinterpret_cast<real_cell>(*it);
-                process_result handled = (*fnc)(fsm,region,state,evt);
-                // reject is considered as erasing an error (HANDLED_FALSE)
-                if ((process_result::HANDLED_FALSE==handled) && (process_result::HANDLED_GUARD_REJECT==res) )
-                    res = process_result::HANDLED_GUARD_REJECT;
-                else
-                    res = handled;
-                ++it;
+                auto get_process_result = reinterpret_cast<real_cell>(transition.get_process_result);
+                result |= (*get_process_result)(sm, state_id, evt);
+                if (result & handled_or_deferred)
+                {
+                    // If a transition was rejected by a guard previously,
+                    // ensure the related bit is not present.
+                    return {
+                        result & handled_or_deferred,
+                        transition.execute};
+                }
             }
-            return res;
+            // At this point result can be HANDLED_FALSE or HANDLED_GUARD_REJECT.
+            return {result, nullptr};
         }
-        // Use a deque with a generic type to avoid unnecessary template instantiations.
-        std::deque<generic_cell> one_state;
+
+        template <typename StateMachine, typename Event, typename Transition>
+        void add_transition()
+        {
+            m_transitions.push_front(
+                {
+                reinterpret_cast<void(*)()>(
+                    &convert_and_get_process_result<StateMachine, Event, Transition>),
+                reinterpret_cast<void(*)()>(
+                    &convert_and_new_execute<StateMachine, Event, Transition>)
+                }
+            );
+        }
+
+      private:
+        // Adapter for calling a transition's get_process_result function.
+        template<typename StateMachine, typename Event, typename Transition>
+        static process_result convert_and_get_process_result(StateMachine& sm, int& state_id, const any_event& event)
+        {
+            return Transition::get_process_result(sm, state_id, *any_cast<Event>(&event));
+        }
+
+        // Adapter for calling a transition's execute function.
+        template<typename StateMachine, typename Event, typename Transition>
+        static process_result convert_and_new_execute(StateMachine& sm, int& state_id, const any_event& event)
+        {
+            return Transition::new_execute(sm, state_id, *any_cast<Event>(&event));
+        }
+
+        std::deque<transition_methods> m_transitions;
     };
 
     // Generates a singleton runtime lookup table that maps current state
     // to a function that makes the SM take its transition on the given
     // Event type.
-    template<class Fsm>
+    template<class StateMachine>
     class dispatch_table
     {
-        using Stt = typename Fsm::complete_table;
+        using Stt = typename StateMachine::complete_table;
+        using real_cell = process_result (*)(StateMachine&, int&, const any_event&);
     public:
-        // Dispatch an event.
-        static process_result dispatch(Fsm& fsm, int region_id, int state_id, const any_event& event)
+        // Evaluate an event.
+        static transition_call evaluate(StateMachine& sm, int& state_id, const any_event& event)
         {
-            return instance().m_state_dispatch_tables[state_id+1].dispatch(fsm, region_id, state_id, event);
+            return instance().m_state_dispatch_tables[state_id+1].evaluate(sm, state_id, event);
+        }
+
+        // Dispatch an event.
+        static process_result dispatch(StateMachine& sm, int& state_id, const any_event& event)
+        {
+            transition_call transition_call = evaluate(sm, state_id, event);
+            return execute_or_result(transition_call, sm, state_id, event);
+        }
+
+        // Evaluate an event of the FSM's internal table.
+        static transition_call evaluate_internal(StateMachine& sm, int& state_id, const any_event& event)
+        {
+            return instance().m_state_dispatch_tables[0].evaluate(sm, state_id, event);
         }
 
         // Dispatch an event to the FSM's internal table.
-        static process_result dispatch_internal(Fsm& fsm, int region_id, int state_id, const any_event& event)
+        static process_result dispatch_internal(StateMachine& sm, const any_event& event)
         {
-            return instance().m_state_dispatch_tables[0].dispatch(fsm, region_id, state_id, event);
+            int no_state_id;
+            transition_call transition_call = evaluate(sm, no_state_id, event);
+            return execute_or_result(transition_call, sm, no_state_id, event);
         }
 
     private:
-        // Adapter for calling a row's execute function.
-        template<typename Event, typename Row>
-        static process_result convert_and_execute(Fsm& fsm, int region_id, int state_id, const any_event& event)
-        {
-            return Row::execute(fsm, region_id, state_id, *any_cast<Event>(&event));
-        }
-
         // Dispatch table for one state.
         class state_dispatch_table
         {
         public:
-            // Initialize the submachine call for the given state.
-            template<typename State>
-            void init_call_submachine()
+            // Initialize the call to the state's process_event function.
+            template<typename CompositeState>
+            void init_composite_state()
             {
-                m_call_submachine = [](Fsm& fsm, const any_event& evt)
-                {
-                    return (fsm.template get_state<State&>()).process_event_internal(evt);
+                m_composite_methods = {
+                    reinterpret_cast<void(*)()>(&call_preprocess_event<CompositeState>),
+                    reinterpret_cast<void(*)()>(&call_process_preprocessed_event<CompositeState>)
                 };
             }
 
-            template<typename Event>
-            chain_row& get_chain_row()
+            // Add a transition to the dispatch table.
+            template<typename Event, typename Transition>
+            void add_transition()
             {
-                return m_entries[to_type_index<Event>()];
+                transition_chain& chain = m_transition_chains[to_type_index<Event>()];
+                chain.add_transition<StateMachine, Event, Transition>();
             }
 
-            // Dispatch an event.
-            process_result dispatch(Fsm& fsm, int region_id, int state_id, const any_event& event) const
+            // Evaluate an event.
+            transition_call evaluate(StateMachine& sm, int& state_id, const any_event& event) const
             {
-                process_result handled = process_result::HANDLED_FALSE;
-                if (m_call_submachine)
+                if (m_composite_methods.get_process_result)
                 {
-                    handled = m_call_submachine(fsm, event);
-                    if (handled)
+                    using real_cell = process_result (*)(StateMachine&, int&, const any_event&);
+                    auto cell = reinterpret_cast<real_cell>(m_composite_methods.get_process_result);
+                    process_result result = (*cell)(sm, state_id, event);
+                    if (result & process_result::HANDLED_TRUE)
                     {
-                        return handled;
+                        return {process_result::HANDLED_TRUE, m_composite_methods.execute};
                     }
                 }
-                auto it = m_entries.find(event.type());
-                if (it != m_entries.end())
+                transition_call call{process_result::HANDLED_FALSE, 0};
+                auto it = m_transition_chains.find(event.type());
+                if (it != m_transition_chains.end())
                 {
-                    handled = (it->second)(fsm, region_id, state_id, event);
+                    call = it->second.evaluate(sm, state_id, event);
                 }
-                return handled;
+                return call;
             }
 
         private:
-            std::unordered_map<std::type_index, chain_row> m_entries;
-            // Special functor if the state is a composite
-            std::function<process_result(Fsm&, const any_event&)> m_call_submachine;
+            template <typename CompositeState>
+            static transition_call call_preprocess_event(StateMachine& sm, int& /*state_id*/, const any_event& event)
+            {
+                return sm.template get_state<CompositeState&>().preprocess_event(event);
+            }
+
+            template <typename CompositeState>
+            static process_result call_process_preprocessed_event(StateMachine& sm, int& /*state_id*/, const any_event& event)
+            {
+                return sm.template get_state<CompositeState&>().process_preprocessed_event(event);
+            }
+
+            std::unordered_map<std::type_index, transition_chain> m_transition_chains;
+            // Optional member if the state is a composite.
+            transition_methods m_composite_methods{};
         };
 
         dispatch_table()
@@ -295,22 +364,32 @@ struct compile_policy_impl<favor_compile_time>
                 [this](auto row)
                 {
                     using Row = decltype(row);
-                    using Event = typename Row::transition_event;
                     using State = typename Row::current_state_type;
-                    static constexpr int state_id = Fsm::template get_state_id<State>();
-                    auto& chain_row = m_state_dispatch_tables[state_id + 1].template get_chain_row<Event>();
-                    chain_row.one_state.push_front(reinterpret_cast<generic_cell>(&convert_and_execute<Event, Row>));
+                    using Event = typename Row::transition_event;
+                    static constexpr int state_id = StateMachine::template get_state_id<State>();
+                    m_state_dispatch_tables[state_id + 1].template add_transition<Event, Row>();
                 });
 
             // Execute state-specific initializations.
-            using submachine_states = mp11::mp_copy_if<state_set, has_back_end_tag>;
-            mp11::mp_for_each<mp11::mp_transform<mp11::mp_identity, submachine_states>>(
+            using composite_states = mp11::mp_copy_if<state_set, has_back_end_tag>;
+            mp11::mp_for_each<mp11::mp_transform<mp11::mp_identity, composite_states>>(
                 [this](auto state_identity)
                 {
-                    using SubmachineState = typename decltype(state_identity)::type;
-                    static constexpr int state_id = Fsm::template get_state_id<SubmachineState>();
-                    m_state_dispatch_tables[state_id + 1].template init_call_submachine<SubmachineState>();
+                    using CompositeState = typename decltype(state_identity)::type;
+                    static constexpr int state_id = StateMachine::template get_state_id<CompositeState>();
+                    m_state_dispatch_tables[state_id + 1].template init_composite_state<CompositeState>();
                 });
+        }
+
+        static process_result execute_or_result(
+            const transition_call& transition_call, StateMachine& fsm, int& state_id, const any_event& event)
+        {
+            if (transition_call.evaluated_result == process_result::HANDLED_TRUE)
+            {
+                auto execute = reinterpret_cast<real_cell>(transition_call.execute);
+                return (*execute)(fsm, state_id, event);
+            }
+            return transition_call.evaluated_result;
         }
 
         // The singleton instance.

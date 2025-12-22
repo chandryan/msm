@@ -51,6 +51,16 @@ constexpr visit_mode operator|(visit_mode lhs, visit_mode rhs)
 namespace detail
 {
 
+struct transition_call
+{
+    // Evaluated processing result of the transition.
+    // HANDLED_TRUE is used as placeholder, in this case the real result
+    // is obtained by calling the execute method.
+    process_result evaluated_result;
+    // Points to a method to execute the transition.
+    void (*execute)();
+};
+
 class enqueued_event
 {
   public:
