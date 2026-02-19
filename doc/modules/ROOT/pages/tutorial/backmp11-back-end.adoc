@@ -170,6 +170,10 @@ If the type of the state appears multiple times in a hierarchical state machine,
 // - if `start()` is called for a running state machine, the call is ignored
 // - if `stop()` is called on a stopped (not running) state machine, the call is ignored
 
+=== Support for simplified functor signatures
+
+Further described in xref:./functor-front-end.adoc#simplified_functor_signatures[the functor front-end documentation].
+
 
 === Simplified state machine signature
 
