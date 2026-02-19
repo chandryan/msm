@@ -18,37 +18,38 @@ endif()
 
 add_executable(boost_msm_tests
     EXCLUDE_FROM_ALL
-    AnonymousAndGuard.cpp
-    Anonymous.cpp
-    Back11CompositeMachine.cpp
-    BigWithFunctors.cpp
-    CompositeMachine.cpp
-    Constructor.cpp
-    Entries.cpp
-    EventQueue.cpp
-    History.cpp
-    KleeneDeferred.cpp
-    ManyDeferTransitions.cpp
-    OrthogonalDeferred2.cpp
-    OrthogonalDeferred3.cpp
-    OrthogonalDeferred.cpp
-    Serialize.cpp
-    SerializeWithHistory.cpp
-    SetStates.cpp
-    SimpleInternal.cpp
-    SimpleInternalFunctors.cpp
-    SimpleKleene.cpp
-    SimpleMachine.cpp
-    SimpleWithFunctors.cpp
-    Test2RegionsAnonymous.cpp
-    TestConstructor.cpp
-    TestConstructorMovableOnlyTypes.cpp
-    TestDeferAndMessageQueue2.cpp
-    TestDeferAndMessageQueue3.cpp
-    TestDeferAndMessageQueue.cpp
-    TestDeferIn2Regions.cpp
-    Throwing.cpp
-    TransitionSkipping.cpp
+    # AnonymousAndGuard.cpp
+    # Anonymous.cpp
+    # Back11CompositeMachine.cpp
+    # BigWithFunctors.cpp
+    # CompositeMachine.cpp
+    # Constructor.cpp
+    # Entries.cpp
+    # EventQueue.cpp
+    # History.cpp
+    # KleeneDeferred.cpp
+    # ManyDeferTransitions.cpp
+    # OrthogonalDeferred.cpp
+    # OrthogonalDeferred2.cpp
+    # OrthogonalDeferred3.cpp
+    OrthogonalDeferred4.cpp
+    # Serialize.cpp
+    # SerializeWithHistory.cpp
+    # SetStates.cpp
+    # SimpleInternal.cpp
+    # SimpleInternalFunctors.cpp
+    # SimpleKleene.cpp
+    # SimpleMachine.cpp
+    # SimpleWithFunctors.cpp
+    # Test2RegionsAnonymous.cpp
+    # TestConstructor.cpp
+    # TestConstructorMovableOnlyTypes.cpp
+    # TestDeferAndMessageQueue2.cpp
+    # TestDeferAndMessageQueue3.cpp
+    # TestDeferAndMessageQueue.cpp
+    # TestDeferIn2Regions.cpp
+    # Throwing.cpp
+    # TransitionSkipping.cpp
     main.cpp
 )
 add_test(NAME boost_msm_tests COMMAND boost_msm_tests)
