@@ -105,6 +105,37 @@ struct compile_policy_impl<
     }
 
     template <typename StateMachine, typename Event>
+    static bool try_defer_event(StateMachine& sm, const Event& event)
+    {
+        // Instantiate the templates for checking lazily,
+        // optimize for the no deferred events case.
+        using base_visit_set =
+            recursive_visit_set<const StateMachine,
+                                is_event_deferred_visitor_base::predicate>;
+        // First check:
+        // We have have deferring states.
+        if constexpr (base_visit_set::needs_traversal::value)
+        {
+            using visitor_t = is_event_deferred_visitor<Event>;
+            using minimal_visit_set =
+                recursive_visit_set<const StateMachine,
+                                    is_event_deferred_visitor_base::predicate,
+                                    visitor_t::template predicate2>;
+            // Second check:
+            // We have deferring states that defer this event.
+            if constexpr (minimal_visit_set::needs_traversal::value)
+            {
+                if (is_event_deferred(sm, event))
+                {
+                    defer_event(sm, event, false);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    template <typename StateMachine, typename Event>
     static void defer_event(StateMachine& sm, Event const& event,
                             bool next_rtc_seq)
     {

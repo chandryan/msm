@@ -672,6 +672,11 @@ class state_machine_base : public FrontEnd
     BOOST_NOINLINE process_result process_event_internal(Event const& event,
                                                          process_info info)
     {
+        if (m_event_processing)
+        {
+            return process_result::HANDLED_FALSE;
+        }
+
         // If the state machine has terminate or interrupt flags, check them.
         if constexpr (mp11::mp_any_of<state_set, is_state_blocking>::value)
         {
@@ -694,15 +699,13 @@ class state_machine_base : public FrontEnd
         {
             if (info != process_info::event_pool)
             {
-                // If we are already processing or the event is deferred in the
+                // If the event is deferred in the
                 // active state configuration, process it later.
                 // Skip the deferral check in submachine calls, since the
                 // parent has already checked and dispatched the event.
-                if (m_event_processing ||
-                    (info != process_info::submachine_call &&
-                     compile_policy_impl::is_event_deferred(self(), event)))
+                if (info != process_info::submachine_call &&
+                    compile_policy_impl::try_defer_event(self(), event))
                 {
-                    compile_policy_impl::defer_event(self(), event, false);
                     return process_result::HANDLED_DEFERRED;
                 }
 
@@ -710,12 +713,6 @@ class state_machine_base : public FrontEnd
                 // that was action-deferred in the last sequence.
                 get_event_pool().cur_seq_cnt += 1;
             }
-        }
-        else
-        {
-            BOOST_ASSERT_MSG(!m_event_processing,
-                             "An event pool must be available to call "
-                             "process_event while processing an event");
         }
 
         // Process the event.
@@ -1145,6 +1142,9 @@ class state_machine_base : public FrontEnd
         }
     };
 
+  // TODO:
+  // introduce machine_state member.
+  protected:
     // data members
     active_state_ids_t   m_active_state_ids;
     optional_members     m_optional_members;

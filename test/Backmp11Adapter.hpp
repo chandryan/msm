@@ -80,6 +80,22 @@ class state_machine_adapter
   public:
     using Base::Base;
 
+    using Flag_AND = backmp11::flag_and;
+
+    template <typename Event>
+    back::HandledEnum process_event(const Event& event)
+    {
+        if (this->m_event_processing)
+        {
+            this->enqueue_event(event);
+            return back::HANDLED_DEFERRED;
+        }
+        else
+        {
+            return Base::process_event(event);
+        }
+    }
+
     // The new API returns a const std::array<...>&.
     const int* current_state() const
     {
