@@ -200,6 +200,15 @@ using store_cd_info = msm::front::Lambda<
 ----
 
 
+== Customizing functor signatures
+
+If you want to further customize your functor signature, you can do so with an adapter utilizing CRTP.
+For demonstration purposes we create a new functor signature, which takes only the event as input argument.
+
+TODO
+
+
+
 [[defining-states-with-entryexit-actions]]
 
 == Defining states with entry/exit actions
