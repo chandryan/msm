@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <boost/msm/front/completion_event.hpp>
+#include <boost/msm/backmp11/detail/any_event.hpp>
 #include <boost/msm/backmp11/detail/metafunctions.hpp>
 #include <boost/msm/backmp11/detail/state_visitor.hpp>
 #include <boost/msm/backmp11/detail/transition_table.hpp>
@@ -94,7 +95,7 @@ struct compile_policy_impl<favor_compile_time>
             {
                 using Event = typename decltype(event_identity)::type;
                 using Flag = EndInterruptFlag<Event>;
-                if (event.type() == typeid(Event))
+                if (event.hash_code() == typeid(Event).hash_code())
                 {
                     result = sm.template is_flag_active<Flag>();
                 }
@@ -112,7 +113,7 @@ struct compile_policy_impl<favor_compile_time>
                              const Fsm& fsm)
         {
             static const is_event_deferred_dispatch_table table{state, fsm};
-            auto it = table.m_cells.find(event.type());
+            auto it = table.m_cells.find(event.hash_code());
             if (it != table.m_cells.end())
             {
                 using real_cell =
@@ -134,7 +135,7 @@ struct compile_policy_impl<favor_compile_time>
                 [this](auto event_identity)
                 {
                     using Event = typename decltype(event_identity)::type;
-                    m_cells[to_type_index<Event>()] =
+                    m_cells[typeid(Event).hash_code()] =
                         reinterpret_cast<generic_cell>(&convert_and_execute<State, Event, Fsm>);
                 });
         }
@@ -143,10 +144,10 @@ struct compile_policy_impl<favor_compile_time>
         static bool convert_and_execute(const State& state,
                                         const any_event& event, const Fsm& fsm)
         {
-            return state.is_event_deferred(*any_cast<Event>(&event), fsm);
+            return state.is_event_deferred(*static_cast<Event*>(event.get()), fsm);
         }
 
-        std::unordered_map<std::type_index, generic_cell> m_cells;
+        std::unordered_map<size_t, generic_cell> m_cells;
     };
 
     class is_event_deferred_visitor : public is_event_deferred_visitor_base
@@ -192,14 +193,6 @@ struct compile_policy_impl<favor_compile_time>
     {
         sm.do_defer_event(event, next_rtc_seq);
     }
-
-    // Convert an event to a type index.
-    template<class Event>
-    static std::type_index to_type_index()
-    {
-        return std::type_index{typeid(Event)};
-    }
-
 
     // Class used to build a chain of transitions for a given event and state.
     // Allows transition conflicts.
@@ -310,6 +303,7 @@ struct compile_policy_impl<favor_compile_time>
                                           any_event const&);
         struct init_cell_value
         {
+            // TODO: hash_code
             std::type_index event_type_index;
             size_t state_id;
             cell_t cell;
@@ -325,7 +319,7 @@ struct compile_policy_impl<favor_compile_time>
         static process_result convert_event_and_execute(
             StateMachine& sm, int region_id, const any_event& event)
         {
-            return Transition::execute(sm, region_id, *any_cast<Event>(&event));
+            return Transition::execute(sm, region_id, *static_cast<Event*>(event.get()));
         }
 
         template <typename Transition>
@@ -359,7 +353,7 @@ struct compile_policy_impl<favor_compile_time>
             // Add a cell to the dispatch table.
             void add_transition_cell(const init_cell_value& value)
             {
-                transition_chain& chain = m_transition_chains[value.event_type_index];
+                transition_chain& chain = m_transition_chains[value.event_type_index.hash_code()];
                 chain.add_transition_cell(value.cell);
             }
 
@@ -375,7 +369,7 @@ struct compile_policy_impl<favor_compile_time>
                         return result;
                     }
                 }
-                auto it = m_transition_chains.find(event.type());
+                auto it = m_transition_chains.find(event.hash_code());
                 if (it != m_transition_chains.end())
                 {
                     result = (it->second.execute)(sm, region_id, event);
@@ -391,7 +385,7 @@ struct compile_policy_impl<favor_compile_time>
                     .process_event_internal(event, process_info::submachine_call);
             }
 
-            std::unordered_map<std::type_index, transition_chain> m_transition_chains;
+            std::unordered_map<size_t, transition_chain> m_transition_chains;
             // Optional method in case the state is a composite.
             process_result (*m_call_process_event)(StateMachine&, const any_event&){nullptr};
         };
@@ -400,6 +394,8 @@ struct compile_policy_impl<favor_compile_time>
         using internal_cell_t = process_result (*)(StateMachine&, any_event const&);
         struct init_internal_cell_value
         {
+            // TODO:
+            // hash_code
             std::type_index event_type_index;
             internal_cell_t cell;
         };
@@ -445,7 +441,7 @@ struct compile_policy_impl<favor_compile_time>
             process_result dispatch(StateMachine& sm, const any_event& event) const
             {
                 process_result result = process_result::HANDLED_FALSE;
-                auto it = m_transition_chains.find(event.type());
+                auto it = m_transition_chains.find(event.hash_code());
                 if (it != m_transition_chains.end())
                 {
                     result = (it->second.execute)(sm, event);
@@ -454,7 +450,7 @@ struct compile_policy_impl<favor_compile_time>
             }
 
           private:
-            std::unordered_map<std::type_index, internal_transition_chain>
+            std::unordered_map<size_t, internal_transition_chain>
                 m_transition_chains;
         };
 
