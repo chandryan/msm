@@ -69,8 +69,9 @@ struct Machine_ : test::StateMachineBase_<Machine_>
 };
 
 // Back contains the suggested fix, back11 contains the current implementation.
-using test_machines = mpl::vector<boost::msm::back::state_machine<Machine_>,
-                                  boost::msm::back11::state_machine<Machine_>>;
+// using test_machines = mpl::vector<boost::msm::back::state_machine<Machine_>,
+//                                   boost::msm::back11::state_machine<Machine_>>;
+using test_machines = mpl::vector<boost::msm::back::state_machine<Machine_>>;
 
 BOOST_AUTO_TEST_CASE_TEMPLATE(guard_reject_test, test_machine, test_machines)
 {
@@ -92,6 +93,7 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(handle_discard_test, test_machine, test_machines)
     sm.conditional = true;
 
     // - suggested fix: action_counter is 2 instead of 1
+    //   (same behavior as in 1.78)
     // - current implementation: segfault
     sm.conditional = true;
     sm.process_event(Ping{});

@@ -1,3 +1,5 @@
+// File copied from 1.78 and BOOST_MPL_HAS_XXX_TRAIT_DEF(...) commented out
+
 // Copyright 2008 Christophe Henry
 // henry UNDERSCORE christophe AT hotmail DOT com
 // This is an extended version of the state machine available in the boost::mpl library
@@ -11,7 +13,6 @@
 #ifndef BOOST_MSM_BACK_DISPATCH_TABLE_H
 #define BOOST_MSM_BACK_DISPATCH_TABLE_H
 
-#include <cstdint>
 #include <utility>
 
 #include <boost/mpl/reverse_fold.hpp>
@@ -25,9 +26,10 @@
 #include <boost/type_traits/is_same.hpp>
 
 #include <boost/msm/event_traits.hpp>
-#include <boost/msm/back/traits.hpp>
 #include <boost/msm/back/metafunctions.hpp>
 #include <boost/msm/back/common_types.hpp>
+
+// BOOST_MPL_HAS_XXX_TRAIT_DEF(is_frow)
 
 namespace boost { namespace msm { namespace back 
 {
@@ -176,9 +178,7 @@ struct dispatch_table
             typedef typename create_stt<Fsm>::type stt; 
             BOOST_STATIC_CONSTANT(int, state_id = 
                 (get_state_id<stt,typename Transition::current_state_type>::value));
-            // reinterpret_cast to uintptr_t to suppress gcc-11 warning
-            self->entries[state_id + 1] = reinterpret_cast<cell>(
-                reinterpret_cast<std::uintptr_t>(&Transition::execute));
+            self->entries[state_id+1] = reinterpret_cast<cell>(&Transition::execute);
         }
         template <class Transition>
         typename ::boost::enable_if<
@@ -422,10 +422,7 @@ struct dispatch_table
     }
 
     // The singleton instance.
-    static const dispatch_table& instance() {
-        static dispatch_table table;
-        return table;
-    }
+    static const dispatch_table instance;
 
  public: // data members
      // +1 => 0 is reserved for this fsm (internal transitions)
