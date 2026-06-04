@@ -1,5 +1,5 @@
 
-SOURCE:=$(shell find modules)
+SOURCE:=$(shell find modules) antora.yml local-playbook.yml mrdocs.cpp mrdocs.yml package-lock.json
 
 .PHONY: build
 build : build/lib/doc/msm/index.html
