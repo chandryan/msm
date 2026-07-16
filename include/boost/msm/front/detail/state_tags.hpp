@@ -19,7 +19,10 @@ namespace boost { namespace msm { namespace front { namespace detail
 
 // States
 struct state_tag {};
+
 struct composite_state_tag {};
+template <typename T>
+using has_composite_state_tag = boost::is_same<typename T::internal::tag, composite_state_tag>;
 
 // Pseudostates
 struct explicit_entry_tag {};

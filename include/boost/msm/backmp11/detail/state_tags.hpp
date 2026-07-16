@@ -23,9 +23,16 @@ namespace boost::msm::backmp11::detail
 struct state_machine_tag {};
 template <typename T>
 using has_state_machine_tag = std::is_same<typename T::internal::tag, state_machine_tag>;
+
+struct composite_state_tag {};
+template <typename T>
+using has_composite_state_tag =
+    std::is_same<typename T::internal::tag, composite_state_tag>;
+
 template <typename T>
 using is_composite = mp11::mp_or<
-    std::is_same<typename T::internal::tag, msm::front::detail::composite_state_tag>,
+    msm::front::detail::has_composite_state_tag<T>,
+    has_composite_state_tag<T>,
     has_state_machine_tag<T>
     >;
 

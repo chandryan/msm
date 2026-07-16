@@ -80,6 +80,7 @@ add_executable(boost_msm_cxx17_tests
     EXCLUDE_FROM_ALL
     Backmp11BasicPolymorphic.cpp
     Backmp11Completion.cpp
+    Backmp11CompositeState.cpp
     Backmp11Constructor.cpp
     Backmp11Context.cpp
     Backmp11CopyMove.cpp

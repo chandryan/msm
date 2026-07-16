@@ -440,7 +440,8 @@ class init_state_visitor
   public:
     template <typename State>
     using predicate = mp11::mp_or<has_exit_pseudostate_be_tag<State>,
-                                  has_state_machine_tag<State>>;
+                                  has_state_machine_tag<State>,
+                                  has_composite_state_tag<State>>;
 
     init_state_visitor(RootSm& root_sm) : m_root_sm(root_sm)
     {
@@ -454,7 +455,8 @@ class init_state_visitor
             state.template init<RootSm>();
         }
 
-        if constexpr (has_state_machine_tag<State>::value)
+        if constexpr (has_state_machine_tag<State>::value ||
+                      has_composite_state_tag<State>::value)
         {
             static_assert(
                 std::is_same_v<typename State::root_sm_t, no_root_sm> ||

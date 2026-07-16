@@ -87,48 +87,40 @@ struct value_array_impl<mp11::mp_list<Ts...>>
 template <typename List>
 static constexpr const auto& value_array = value_array_impl<List>::value;
 
-// Helper to convert a front-end state to a back-end state.
+// Converts a front-end state reference to how it is *stored* in the machine's
+// state tuple. This is the storage form only; resolving a connection wrapper
+// (exit_pt/entry_pt/direct/fork) named in a transition table to its owning
+// submachine is a source/target-resolution concern and lives in
+// convert_source_state_impl / convert_target_state_impl below.
 template <typename StateMachine, typename State, typename Enable = void>
 struct convert_state_impl
 {
     using type = State;
 };
-// Specialization for a 'direct' state wrapper struct used as target state (defined in the back-end).
-template <typename StateMachine, typename State>
-struct convert_state_impl<StateMachine, State, std::enable_if_t<has_explicit_entry_be_tag<State>::value>>
-{
-    using type = typename State::owner;
-};
-// Specialization for a "direct fork", a sequence of 'direct' state wrappers used directly as the target state.
-template <typename StateMachine, typename State>
-struct convert_state_impl<StateMachine, State, std::enable_if_t<mpl::is_sequence<State>::value>>
-{
-    using target_states = to_mp_list_t<State>;
-    using type = typename mp11::mp_front<target_states>::owner;
-};
-// Specialization for a 'entry_pt' state wrapper struct (defined in the back-end).
-template <typename StateMachine, typename State>
-struct convert_state_impl<StateMachine, State, std::enable_if_t<has_entry_pseudostate_be_tag<State>::value>>
-{
-    using type = typename State::owner;
-};
 // Specialization for an 'exit_pseudo_state' struct (defined in the front-end).
 // This converts the FE definition to a BE definition to establish the
-// connection to the target SM.
+// connection to the target SM. The resulting 'exit_pt' is what is stored.
 template <typename StateMachine, typename State>
 struct convert_state_impl<StateMachine, State, std::enable_if_t<front::detail::has_exit_pseudostate_tag<State>::value>>
 {
     using type = typename StateMachine::template exit_pt<State>;
 };
-// Specialization for a 'exit_pt' struct (defined in the back-end).
 template <typename StateMachine, typename State>
-struct convert_state_impl<StateMachine, State, std::enable_if_t<has_exit_pseudostate_be_tag<State>::value>>
-{
-    using type = typename State::owner;
-};
+using convert_state = typename convert_state_impl<StateMachine, State>::type;
 
 template <typename StateMachine, typename State, typename Enable = void>
 struct convert_source_state_impl : convert_state_impl<StateMachine, State> {};
+// An 'exit_pt' used as a source resolves to its owning submachine, which is the
+// state the enclosing machine actually stores (the second part of a compound
+// transition).
+template <typename StateMachine, typename State>
+struct convert_source_state_impl<
+    StateMachine,
+    State,
+    std::enable_if_t<has_exit_pseudostate_be_tag<State>::value>>
+{
+    using type = typename State::owner;
+};
 template <typename StateMachine, typename State>
 struct convert_source_state_impl<
     StateMachine,
@@ -168,6 +160,36 @@ using convert_source_state = typename convert_source_state_impl<StateMachine, St
 
 template <typename StateMachine, typename State, typename Enable = void>
 struct convert_target_state_impl : convert_state_impl<StateMachine, State> {};
+// A 'direct' explicit-entry wrapper used as a target resolves to its owning
+// submachine (the enclosing machine's stored state).
+template <typename StateMachine, typename State>
+struct convert_target_state_impl<
+    StateMachine,
+    State,
+    std::enable_if_t<has_explicit_entry_be_tag<State>::value>>
+{
+    using type = typename State::owner;
+};
+// A "direct fork" -- a sequence of 'direct' wrappers -- likewise resolves to the
+// (shared) owning submachine.
+template <typename StateMachine, typename State>
+struct convert_target_state_impl<
+    StateMachine,
+    State,
+    std::enable_if_t<mpl::is_sequence<State>::value>>
+{
+    using target_states = to_mp_list_t<State>;
+    using type = typename mp11::mp_front<target_states>::owner;
+};
+// An 'entry_pt' wrapper used as a target resolves to its owning submachine.
+template <typename StateMachine, typename State>
+struct convert_target_state_impl<
+    StateMachine,
+    State,
+    std::enable_if_t<has_entry_pseudostate_be_tag<State>::value>>
+{
+    using type = typename State::owner;
+};
 template <typename StateMachine, typename State>
 struct convert_target_state_impl<
     StateMachine,
